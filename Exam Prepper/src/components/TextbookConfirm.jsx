@@ -10,7 +10,7 @@ export default function TextbookConfirm({ selectedClass, onConfirm }) {
         <div className="textbook-info">
           <div className="textbook-title">OpenStax Chemistry 2e</div>
           <div className="textbook-authors">Langley, Bier, Blaser, et al.</div>
-          <div className="textbook-detail">{selectedClass} topics — Chapters 11–17</div>
+          <div className="textbook-detail">{selectedClass} topics — Chapters 1–11</div>
         </div>
       </div>
       <button className="btn-primary" onClick={onConfirm}>

@@ -2,6 +2,10 @@ import React from 'react'
 
 const CIRCUMFERENCE = 2 * Math.PI * 50 // r=50
 
+function textbookUrl(chapter) {
+  return `https://openstax.org/books/chemistry-2e/pages/${chapter}-introduction`
+}
+
 function isCorrect(answer, question) {
   if (!answer.followUpAnswer) return false
   if (question.followUp.type === 'select-all') {
@@ -84,9 +88,22 @@ export default function Results({ questions, answers, onRestart }) {
                   style={{ width: `${scores[i]}%`, background: getColor(scores[i]) }}
                 />
               </div>
-              <span className="topic-tag" style={{ color: getColor(scores[i]) }}>
-                {getLabel(scores[i])}
-              </span>
+              {getLabel(scores[i]) === 'Study this' ? (
+                <a
+                  className="topic-tag topic-tag--link"
+                  href={textbookUrl(q.chapter)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: getColor(scores[i]) }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  Study this ↗
+                </a>
+              ) : (
+                <span className="topic-tag" style={{ color: getColor(scores[i]) }}>
+                  {getLabel(scores[i])}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -103,6 +120,14 @@ export default function Results({ questions, answers, onRestart }) {
               <li key={q.id} className="study-item">
                 <span className="study-chapter">Ch. {q.chapter}</span>
                 <span className="study-topic">{q.topic}</span>
+                <a
+                  className="study-link"
+                  href={textbookUrl(q.chapter)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open in OpenStax ↗
+                </a>
               </li>
             ))}
           </ul>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import Math from './Math'
 
 const CONFIDENCE_LABELS = [
   'Just guessing',
@@ -120,6 +121,7 @@ export default function Survey({ questions, onComplete }) {
                     'option-btn',
                     selected && 'option-btn--selected',
                     isSelectAll && 'option-btn--checkbox',
+                    opt.latex && 'option-btn--math',
                   ].filter(Boolean).join(' ')}
                   onClick={() => isSelectAll ? toggleOption(opt.id) : setSelectedOption(opt.id)}
                 >
@@ -129,7 +131,18 @@ export default function Survey({ questions, onComplete }) {
                       : opt.id.toUpperCase()
                     }
                   </span>
-                  <span className="option-text">{opt.text}</span>
+                  <span className="option-content">
+                    {opt.latex && (
+                      <span className="option-math-wrap">
+                        <Math latex={opt.latex} />
+                      </span>
+                    )}
+                    {opt.text && (
+                      <span className={opt.latex ? 'option-subtext' : 'option-text'}>
+                        {opt.text}
+                      </span>
+                    )}
+                  </span>
                 </button>
               )
             })}

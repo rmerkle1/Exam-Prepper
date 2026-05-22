@@ -18,6 +18,7 @@ export const CHAPTER_META = {
 export const QUESTIONS = {
   // ─── CHM113: Chapters 1–11 ───────────────────────────────────────────────
   CHM113: [
+
     // ── Chapter 1: Matter, Measurement & Problem Solving ──────────────────
     {
       id: 'sig-figs-count',
@@ -35,6 +36,7 @@ export const QUESTIONS = {
         correctId: 'b',
       },
     },
+
     {
       id: 'sig-figs-calc',
       chapter: 1,
@@ -43,30 +45,64 @@ export const QUESTIONS = {
       followUp: {
         prompt: 'Calculate 12.5 × 0.234 and express the answer with the correct number of significant figures.',
         options: [
-          { id: 'a', text: '2.9  (2 significant figures — incorrect; both values have 3)' },
-          { id: 'b', text: '2.93  (3 significant figures — matches the least precise factor)' },
-          { id: 'c', text: '2.925  (4 significant figures — unrounded calculator result)' },
-          { id: 'd', text: '2.9250  (5 significant figures — adds extra precision that isn\'t justified)' },
+          {
+            id: 'a',
+            latex: '12.5 \\times 0.234 = 2.9',
+            text: '2 significant figures — incorrect; both factors have 3',
+          },
+          {
+            id: 'b',
+            latex: '12.5 \\times 0.234 = 2.93',
+            text: '3 significant figures — matches the fewest sig figs in the problem',
+          },
+          {
+            id: 'c',
+            latex: '12.5 \\times 0.234 = 2.925',
+            text: '4 significant figures — unrounded calculator result',
+          },
+          {
+            id: 'd',
+            latex: '12.5 \\times 0.234 = 2.9250',
+            text: '5 significant figures — adds unjustified precision',
+          },
         ],
         correctId: 'b',
       },
     },
+
     {
       id: 'metric-conversions',
       chapter: 1,
       topic: 'Metric Unit Conversions',
       question: 'Can you convert between metric units such as mL to L, mg to g, or nm to m using dimensional analysis?',
       followUp: {
-        prompt: 'How many liters are equivalent to 2,500 mL?',
+        prompt: 'How many liters are equivalent to 2,500 mL? Select the correct dimensional analysis setup.',
         options: [
-          { id: 'a', text: '2,500,000 L  (multiplied by 1000 instead of dividing)' },
-          { id: 'b', text: '25.0 L  (divided by 100 — wrong conversion factor)' },
-          { id: 'c', text: '2.50 L  (divided by 1000; 1 L = 1000 mL)' },
-          { id: 'd', text: '0.250 L  (divided by 10,000 — wrong conversion factor)' },
+          {
+            id: 'a',
+            latex: '2500 \\text{ mL} \\times \\dfrac{1000 \\text{ mL}}{1 \\text{ L}} = 2{,}500{,}000 \\text{ L}',
+            text: 'Conversion factor is inverted — mL appear in numerator and denominator',
+          },
+          {
+            id: 'b',
+            latex: '2500 \\text{ mL} \\times \\dfrac{1 \\text{ L}}{100 \\text{ mL}} = 25.0 \\text{ L}',
+            text: 'Wrong factor — divided by 100 instead of 1000',
+          },
+          {
+            id: 'c',
+            latex: '2500 \\text{ mL} \\times \\dfrac{1 \\text{ L}}{1000 \\text{ mL}} = 2.50 \\text{ L}',
+            text: 'mL cancel correctly; 1 L = 1000 mL',
+          },
+          {
+            id: 'd',
+            latex: '2500 \\text{ mL} \\times \\dfrac{1 \\text{ L}}{10{,}000 \\text{ mL}} = 0.250 \\text{ L}',
+            text: 'Wrong factor — divided by 10,000 instead of 1000',
+          },
         ],
         correctId: 'c',
       },
     },
+
     {
       id: 'classifying-matter',
       chapter: 1,
@@ -78,7 +114,7 @@ export const QUESTIONS = {
           { id: 'a', text: 'Salt dissolved in water  (uniform throughout — homogeneous mixture)' },
           { id: 'b', text: 'Pure copper metal  (single element, not a mixture)' },
           { id: 'c', text: 'Carbon dioxide gas  (two elements chemically combined — compound)' },
-          { id: 'd', text: 'Italian salad dressing with visible oil and water layers  (two phases, not uniform — heterogeneous)' },
+          { id: 'd', text: 'Italian salad dressing with visible oil and water layers  (two phases, not uniform)' },
         ],
         correctId: 'd',
       },
@@ -101,6 +137,7 @@ export const QUESTIONS = {
         correctId: 'c',
       },
     },
+
     {
       id: 'subatomic-particles',
       chapter: 2,
@@ -117,6 +154,7 @@ export const QUESTIONS = {
         correctId: 'c',
       },
     },
+
     {
       id: 'avg-atomic-mass',
       chapter: 2,
@@ -125,26 +163,43 @@ export const QUESTIONS = {
       followUp: {
         prompt: 'Chlorine has two stable isotopes: ³⁵Cl (75.77% abundant, 34.97 u) and ³⁷Cl (24.23% abundant, 36.97 u). Which calculation gives the correct average atomic mass?',
         options: [
-          { id: 'a', text: 'avg = (34.97 + 36.97) ÷ 2 = 35.97 u  (simple average ignores abundance)' },
-          { id: 'b', text: 'avg = 0.7577 × 34.97 + 0.2423 × 36.97 = 35.45 u  (weighted by fractional abundance)' },
-          { id: 'c', text: 'avg = 75.77 × 34.97 + 24.23 × 36.97 = 3,550 u  (used percentages instead of decimals)' },
-          { id: 'd', text: 'avg = (75.77 + 24.23) ÷ (34.97 + 36.97) = 1.39 u  (divided total % by total mass — not a valid formula)' },
+          {
+            id: 'a',
+            latex: '\\dfrac{34.97 + 36.97}{2} = 35.97 \\text{ u}',
+            text: 'Simple average — ignores the different abundances',
+          },
+          {
+            id: 'b',
+            latex: '0.7577(34.97) + 0.2423(36.97) = 35.45 \\text{ u}',
+            text: 'Weighted by fractional abundance (decimal form)',
+          },
+          {
+            id: 'c',
+            latex: '75.77(34.97) + 24.23(36.97) = 3{,}550 \\text{ u}',
+            text: 'Used % values directly instead of converting to decimals first',
+          },
+          {
+            id: 'd',
+            latex: '\\dfrac{75.77 + 24.23}{34.97 + 36.97} = 1.39 \\text{ u}',
+            text: 'Not a valid formula for weighted average',
+          },
         ],
         correctId: 'b',
       },
     },
+
     {
       id: 'nomenclature',
       chapter: 2,
-      topic: 'Chemical Nomenclature',
-      question: 'Can you name ionic, covalent (molecular), and acidic compounds, and write molecular formulas from their names?',
+      topic: 'Nomenclature — Ionic Compounds',
+      question: 'Can you name ionic compounds and write their molecular formulas from a name?',
       followUp: {
         prompt: 'What is the correct molecular formula for copper(II) nitrate?',
         options: [
-          { id: 'a', text: 'CuNO₃  (assumes a 1:1 ratio, but charges don\'t balance: Cu²⁺ and NO₃⁻)' },
-          { id: 'b', text: 'Cu(NO₃)₂  (Cu²⁺ needs two NO₃⁻ to balance the 2+ charge)' },
-          { id: 'c', text: 'Cu₂NO₃  (two Cu for one nitrate — charges don\'t balance)' },
-          { id: 'd', text: 'Cu₂(NO₃)₃  (would imply Cu is 3+, but the name says copper(II))' },
+          { id: 'a', text: 'CuNO₃  (assumes 1:1 ratio; charges don\'t balance: Cu²⁺ needs two NO₃⁻)' },
+          { id: 'b', text: 'Cu(NO₃)₂  (Cu²⁺ requires two NO₃⁻ ions to give a net charge of zero)' },
+          { id: 'c', text: 'Cu₂NO₃  (two Cu for one nitrate — charges still unbalanced)' },
+          { id: 'd', text: 'Cu₂(NO₃)₃  (would imply each Cu is 3+, but name says copper(II))' },
         ],
         correctId: 'b',
       },
@@ -154,7 +209,7 @@ export const QUESTIONS = {
       id: 'covalent-nomenclature',
       chapter: 2,
       topic: 'Nomenclature — Covalent Compounds',
-      question: 'Do you know the IUPAC prefix rules for naming covalent (molecular) compounds — including when to use "mono-" and how to handle vowel drops?',
+      question: 'Do you know the IUPAC prefix rules for naming covalent (molecular) compounds — including when to drop "mono-" and how to handle vowel endings?',
       followUp: {
         type: 'select-all',
         prompt: 'Which of the following covalent compound name–formula pairs are written correctly? Select all that apply.',
@@ -165,12 +220,13 @@ export const QUESTIONS = {
           { id: 'd', text: 'NO₂  —  Nitrogen dioxide' },
         ],
         correctIds: ['b', 'd'],
-        // A is wrong: N₂ needs "di-" prefix → dinitrogen tetroxide
-        // B is correct: no "mono" for first element; tetra- for 4 Cl
-        // C is wrong: only one S → sulfur trioxide, not disulfur
-        // D is correct: no "mono" for first element; di- for 2 O
+        // A wrong: N₂ requires "di-" prefix → dinitrogen tetroxide
+        // B correct: no "mono" for first element; tetrachloride for 4 Cl
+        // C wrong: only one S → sulfur trioxide, not disulfur
+        // D correct: no "mono" for first element; dioxide for 2 O
       },
     },
+
     {
       id: 'ionic-transition-metal',
       chapter: 2,
@@ -188,28 +244,29 @@ export const QUESTIONS = {
         correctIds: ['a', 'c'],
         // A correct: 2 Cl⁻ → Fe must be 2+ → iron(II) chloride ✓
         // B wrong: Cu can be +1 or +2 — Roman numeral required → copper(II) oxide
-        // C correct: 2 O²⁻ = 4− → Mn must be 4+ → manganese(IV) oxide ✓
+        // C correct: 2 O²⁻ = 4− total → Mn must be 4+ → manganese(IV) oxide ✓
         // D wrong: 3 O²⁻ = 6− shared by 2 Fe → each Fe is 3+ → iron(III) oxide
       },
     },
+
     {
-      id: 'oxoacid-nomenclature',
+      id: 'acid-nomenclature',
       chapter: 2,
-      topic: 'Nomenclature — Oxoacids',
-      question: 'Do you know the naming rules for oxoacids — using "-ic acid" for oxyanions ending in "-ate" and "-ous acid" for those ending in "-ite"?',
+      topic: 'Nomenclature — Acid Naming',
+      question: 'Do you know how to name oxoacids (using -ic acid and -ous acid suffixes) and hydroacids (using the hydro- prefix)?',
       followUp: {
         type: 'select-all',
-        prompt: 'Which of the following oxoacid formula–name pairs are written correctly? Select all that apply.',
+        prompt: 'Which of the following acid formula–name pairs are written correctly? Select all that apply.',
         options: [
-          { id: 'a', text: 'H₂SO₄  —  Sulfuric acid' },
+          { id: 'a', text: 'H₂SO₃  —  Sulfurous acid' },
           { id: 'b', text: 'HNO₂  —  Nitric acid' },
-          { id: 'c', text: 'H₃PO₃  —  Phosphorous acid' },
+          { id: 'c', text: 'HF  —  Hydrofluoric acid' },
           { id: 'd', text: 'HClO₃  —  Hypochlorous acid' },
         ],
         correctIds: ['a', 'c'],
-        // A correct: sulfate (SO₄²⁻) → sulfuric acid ✓
+        // A correct: sulfite (SO₃²⁻) → -ite oxyanion → -ous acid → sulfurous acid ✓
         // B wrong: HNO₂ comes from nitrite (NO₂⁻) → nitrous acid, not nitric
-        // C correct: phosphite (PO₃³⁻) → phosphorous acid ✓
+        // C correct: HF is a hydroacid → hydro + fluorine + -ic acid → hydrofluoric acid ✓
         // D wrong: HClO₃ comes from chlorate (ClO₃⁻) → chloric acid; hypochlorous acid is HClO
       },
     },
@@ -221,102 +278,195 @@ export const QUESTIONS = {
       topic: 'Molar Mass as a Conversion Factor',
       question: 'Can you use molar mass as a conversion factor to convert between grams and moles of a substance?',
       followUp: {
-        prompt: 'How many moles are in 36.0 g of water (H₂O)? (Molar mass of H₂O = 18.02 g/mol)',
+        prompt: 'How many moles are in 36.0 g of water (H₂O)? (Molar mass of H₂O = 18.02 g/mol) Select the correct setup.',
         options: [
-          { id: 'a', text: '36.0 mol  (forgot to divide by molar mass)' },
-          { id: 'b', text: '18.02 mol  (used the molar mass value directly as the answer)' },
-          { id: 'c', text: '2.00 mol  (36.0 g ÷ 18.02 g/mol = 2.00 mol)' },
-          { id: 'd', text: '0.501 mol  (divided molar mass by mass — inverted the conversion)' },
+          {
+            id: 'a',
+            latex: '36.0 \\text{ g} \\times \\dfrac{18.02 \\text{ g}}{1 \\text{ mol}}',
+            text: 'Molar mass is inverted — grams appear in both numerator and denominator',
+          },
+          {
+            id: 'b',
+            latex: '36.0 \\text{ g} \\times \\dfrac{1 \\text{ mol}}{18.02 \\text{ g}} = 2.00 \\text{ mol}',
+            text: 'Grams cancel correctly, leaving moles',
+          },
+          {
+            id: 'c',
+            latex: '\\dfrac{18.02 \\text{ g/mol}}{36.0 \\text{ g}} = 0.501 \\text{ mol}^{-1}',
+            text: 'Numerator and denominator are swapped; units don\'t simplify to mol',
+          },
+          {
+            id: 'd',
+            latex: '36.0 \\text{ g} + 18.02 \\text{ g/mol}',
+            text: 'Cannot add values with different units',
+          },
         ],
-        correctId: 'c',
+        correctId: 'b',
       },
     },
+
     {
       id: 'avogadro',
       chapter: 3,
       topic: "Avogadro's Number & Particle Counting",
       question: "Can you use Avogadro's number (6.022 × 10²³ mol⁻¹) to convert between moles and number of atoms, molecules, or formula units?",
       followUp: {
-        prompt: 'How many molecules are in 2.00 mol of CO₂?  (Nₐ = 6.022 × 10²³ mol⁻¹)',
+        prompt: 'How many molecules are in 2.00 mol of CO₂?  (Nₐ = 6.022 × 10²³ mol⁻¹) Select the correct setup.',
         options: [
-          { id: 'a', text: '1.20 × 10²⁴ molecules  (2.00 mol × 6.022 × 10²³ mol⁻¹)' },
-          { id: 'b', text: '3.32 × 10⁻²⁴ molecules  (divided instead of multiplied by Nₐ)' },
-          { id: 'c', text: '6.022 × 10²³ molecules  (the number for 1 mol, not 2 mol)' },
-          { id: 'd', text: '2.65 × 10²⁵ molecules  (mistakenly used molar mass 44.0 instead of 2.00 mol)' },
+          {
+            id: 'a',
+            latex: '2.00 \\text{ mol} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molecules}}{1 \\text{ mol}} = 1.20 \\times 10^{24} \\text{ molecules}',
+            text: 'Moles cancel correctly, leaving molecules',
+          },
+          {
+            id: 'b',
+            latex: '2.00 \\text{ mol} \\times \\dfrac{1 \\text{ mol}}{6.022 \\times 10^{23} \\text{ molecules}}',
+            text: "Avogadro's number is inverted — moles don't cancel",
+          },
+          {
+            id: 'c',
+            latex: '1.00 \\text{ mol} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molecules}}{1 \\text{ mol}} = 6.022 \\times 10^{23}',
+            text: 'Used 1 mol instead of 2.00 mol',
+          },
+          {
+            id: 'd',
+            latex: '44.0 \\tfrac{\\text{g}}{\\text{mol}} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molecules}}{1 \\text{ mol}}',
+            text: 'Used the molar mass of CO₂ instead of the given number of moles',
+          },
         ],
         correctId: 'a',
       },
     },
+
     {
       id: 'percent-composition',
       chapter: 3,
       topic: 'Percent Composition',
       question: 'Can you calculate the percent by mass of each element in a compound from its molecular formula and molar masses?',
       followUp: {
-        prompt: 'What is the percent by mass of oxygen in CO₂?  (C = 12.01 g/mol, O = 16.00 g/mol; molar mass of CO₂ = 44.01 g/mol)',
+        prompt: 'What is the percent by mass of oxygen in CO₂?  (C = 12.01 g/mol, O = 16.00 g/mol; molar mass CO₂ = 44.01 g/mol) Select the correct setup.',
         options: [
-          { id: 'a', text: '% O = 16.00 / 44.01 × 100 = 36.4%  (counted only one oxygen atom)' },
-          { id: 'b', text: '% O = 12.01 / 44.01 × 100 = 27.3%  (calculated percent carbon, not oxygen)' },
-          { id: 'c', text: '% O = 2/3 × 100 = 66.7%  (counted atoms by number, not by mass)' },
-          { id: 'd', text: '% O = 2(16.00) / 44.01 × 100 = 72.7%  (both oxygens included, divided by molar mass)' },
+          {
+            id: 'a',
+            latex: '\\%\\,\\text{O} = \\dfrac{16.00 \\text{ g/mol}}{44.01 \\text{ g/mol}} \\times 100 = 36.4\\%',
+            text: 'Counted only one oxygen atom instead of two',
+          },
+          {
+            id: 'b',
+            latex: '\\%\\,\\text{O} = \\dfrac{12.01 \\text{ g/mol}}{44.01 \\text{ g/mol}} \\times 100 = 27.3\\%',
+            text: 'Calculated percent carbon, not oxygen',
+          },
+          {
+            id: 'c',
+            latex: '\\%\\,\\text{O} = \\dfrac{2}{3} \\times 100 = 66.7\\%',
+            text: 'Counted atoms by number, not by mass',
+          },
+          {
+            id: 'd',
+            latex: '\\%\\,\\text{O} = \\dfrac{2(16.00) \\text{ g/mol}}{44.01 \\text{ g/mol}} \\times 100 = 72.7\\%',
+            text: 'Both oxygen atoms included, divided by total molar mass',
+          },
         ],
         correctId: 'd',
       },
     },
+
     {
       id: 'dilution',
       chapter: 3,
       topic: 'Dilution Equation  (C₁V₁ = C₂V₂)',
       question: 'Can you use the dilution equation C₁V₁ = C₂V₂ to find a missing concentration or volume when preparing a diluted solution?',
       followUp: {
-        prompt: 'What volume of a 12.0 M HCl stock solution is needed to prepare 500 mL of 0.300 M HCl?',
+        prompt: 'What volume of a 12.0 M HCl stock solution is needed to prepare 500 mL of 0.300 M HCl? Select the correct setup.',
         options: [
-          { id: 'a', text: 'V₁ = (12.0 × 0.300) / 500 = 0.00720 mL  (rearrangement error)' },
-          { id: 'b', text: 'V₁ = (0.300 × 500) / 12.0 = 12.5 mL  (correct: V₁ = C₂V₂ / C₁)' },
-          { id: 'c', text: 'V₁ = (12.0 × 500) / 0.300 = 20,000 mL  (C₁ and C₂ are swapped)' },
-          { id: 'd', text: 'V₁ = 0.300 × 500 × 12.0 = 1,800 mL  (multiplied all three values together)' },
+          {
+            id: 'a',
+            latex: 'V_1 = \\dfrac{C_1 \\times C_2}{V_2} = \\dfrac{12.0 \\times 0.300}{500} = 0.0072 \\text{ mL}',
+            text: 'Incorrect rearrangement of C₁V₁ = C₂V₂',
+          },
+          {
+            id: 'b',
+            latex: 'V_1 = \\dfrac{C_2 V_2}{C_1} = \\dfrac{0.300 \\text{ M} \\times 500 \\text{ mL}}{12.0 \\text{ M}} = 12.5 \\text{ mL}',
+            text: 'Correct rearrangement: V₁ = C₂V₂ / C₁',
+          },
+          {
+            id: 'c',
+            latex: 'V_1 = \\dfrac{C_1 V_2}{C_2} = \\dfrac{12.0 \\text{ M} \\times 500 \\text{ mL}}{0.300 \\text{ M}} = 20{,}000 \\text{ mL}',
+            text: 'C₁ and C₂ are swapped in the rearrangement',
+          },
+          {
+            id: 'd',
+            latex: 'V_1 = C_1 \\times C_2 \\times V_2 = 12.0 \\times 0.300 \\times 500 = 1800',
+            text: 'All three values multiplied together — not a valid rearrangement',
+          },
         ],
         correctId: 'b',
       },
     },
+
     {
       id: 'molarity-conversion',
       chapter: 3,
       topic: 'Molarity as a Conversion Factor',
       question: 'Can you use molarity (mol/L) as a conversion factor in a dimensional analysis chain to find moles of solute from a given solution volume?',
       followUp: {
-        prompt: 'How many moles of NaCl are in 250 mL of a 2.00 M NaCl solution? Which setup is correct?',
+        prompt: 'How many moles of NaCl are in 250 mL of a 2.00 M NaCl solution? Select the correct setup.',
         options: [
-          { id: 'a', text: '250 mL × (1000 mL / 1 L) × (2.00 mol / 1 L)' },
-          { id: 'b', text: '250 mL × (1 L / 1000 mL) × (2.00 mol / 1 L) = 0.500 mol' },
-          { id: 'c', text: '250 mL × (2.00 mol / 1 L) = 500 mol' },
-          { id: 'd', text: '250 mL × (1 L / 1000 mL) × (1 L / 2.00 mol)' },
+          {
+            id: 'a',
+            latex: '250 \\text{ mL} \\times \\dfrac{1000 \\text{ mL}}{1 \\text{ L}} \\times \\dfrac{2.00 \\text{ mol}}{1 \\text{ L}}',
+            text: 'mL→L conversion is inverted — mL multiply instead of cancel',
+          },
+          {
+            id: 'b',
+            latex: '250 \\text{ mL} \\times \\dfrac{1 \\text{ L}}{1000 \\text{ mL}} \\times \\dfrac{2.00 \\text{ mol}}{1 \\text{ L}} = 0.500 \\text{ mol}',
+            text: 'mL cancel first, then L cancel — only mol remains',
+          },
+          {
+            id: 'c',
+            latex: '250 \\text{ mL} \\times \\dfrac{2.00 \\text{ mol}}{1 \\text{ L}} = 500 \\text{ mol}',
+            text: 'Skipped mL→L conversion; mL and L never cancel',
+          },
+          {
+            id: 'd',
+            latex: '250 \\text{ mL} \\times \\dfrac{1 \\text{ L}}{1000 \\text{ mL}} \\times \\dfrac{1 \\text{ L}}{2.00 \\text{ mol}}',
+            text: 'Molarity is inverted — gives L²/mol, not mol',
+          },
         ],
         correctId: 'b',
-        // A wrong: mL→L conversion is inverted (multiplies by 1000 instead of dividing)
-        // B correct: mL→L first, then mol/L gives mol ✓
-        // C wrong: skipped the mL→L conversion; units don't cancel
-        // D wrong: molarity is inverted (L/mol instead of mol/L)
       },
     },
+
     {
       id: 'grams-to-molecules',
       chapter: 3,
       topic: 'Grams → Moles → Molecules',
       question: 'Can you set up a dimensional analysis chain to convert a mass in grams to a number of molecules, using molar mass and Avogadro\'s number as conversion factors?',
       followUp: {
-        prompt: 'How many molecules are in 9.00 g of H₂O? (Molar mass H₂O = 18.02 g/mol, Nₐ = 6.022 × 10²³ mol⁻¹) Which setup is correct?',
+        prompt: 'How many molecules are in 9.00 g of H₂O? (Molar mass H₂O = 18.02 g/mol, Nₐ = 6.022 × 10²³ mol⁻¹) Select the correct setup.',
         options: [
-          { id: 'a', text: '9.00 g × (18.02 g / 1 mol) × (6.022 × 10²³ molecules / 1 mol)' },
-          { id: 'b', text: '9.00 g × (1 mol / 18.02 g) × (6.022 × 10²³ molecules / 1 mol) = 3.01 × 10²³ molecules' },
-          { id: 'c', text: '9.00 g × (1 mol / 18.02 g) × (1 mol / 6.022 × 10²³ molecules)' },
-          { id: 'd', text: '9.00 g × (6.022 × 10²³ molecules / 1 mol)' },
+          {
+            id: 'a',
+            latex: '9.00 \\text{ g} \\times \\dfrac{18.02 \\text{ g}}{1 \\text{ mol}} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molec.}}{1 \\text{ mol}}',
+            text: 'Molar mass is inverted — grams don\'t cancel',
+          },
+          {
+            id: 'b',
+            latex: '9.00 \\text{ g} \\times \\dfrac{1 \\text{ mol}}{18.02 \\text{ g}} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molec.}}{1 \\text{ mol}} = 3.01 \\times 10^{23}',
+            text: 'g cancel, then mol cancel — only molecules remain',
+          },
+          {
+            id: 'c',
+            latex: '9.00 \\text{ g} \\times \\dfrac{1 \\text{ mol}}{18.02 \\text{ g}} \\times \\dfrac{1 \\text{ mol}}{6.022 \\times 10^{23} \\text{ molec.}}',
+            text: "Avogadro's number is inverted — units don't simplify to molecules",
+          },
+          {
+            id: 'd',
+            latex: '9.00 \\text{ g} \\times \\dfrac{6.022 \\times 10^{23} \\text{ molec.}}{1 \\text{ mol}}',
+            text: 'Skipped the g→mol step; grams never cancel',
+          },
         ],
         correctId: 'b',
-        // A wrong: molar mass is inverted (g/mol used as mol/g) — grams don't cancel
-        // B correct: g → mol → molecules, all units cancel ✓
-        // C wrong: Avogadro's number is inverted; gives mol²/molecules instead of molecules
-        // D wrong: skipped g→mol step; grams never cancel
       },
     },
   ],
