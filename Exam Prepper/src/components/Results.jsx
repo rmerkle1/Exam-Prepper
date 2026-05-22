@@ -2,9 +2,21 @@ import React from 'react'
 
 const CIRCUMFERENCE = 2 * Math.PI * 50 // r=50
 
+function isCorrect(answer, question) {
+  if (!answer.followUpAnswer) return false
+  if (question.followUp.type === 'select-all') {
+    const sel = Array.isArray(answer.followUpAnswer)
+      ? [...answer.followUpAnswer].sort()
+      : []
+    const cor = [...question.followUp.correctIds].sort()
+    return sel.length === cor.length && sel.every((v, i) => v === cor[i])
+  }
+  return answer.followUpAnswer === question.followUp.correctId
+}
+
 function scoreAnswer(answer, question) {
   if (answer.understanding === 'no') return 0
-  const correct = answer.followUpAnswer === question.followUp.correctId
+  const correct = isCorrect(answer, question)
   if (correct) {
     // 60–100% based on confidence
     return 50 + answer.confidence * 10

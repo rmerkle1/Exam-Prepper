@@ -12,11 +12,18 @@ export default function Survey({ questions, onComplete }) {
   const [index, setIndex] = useState(0)
   const [phase, setPhase] = useState('main') // 'main' | 'followup'
   const [answers, setAnswers] = useState([])
+
+  // Single-select state
   const [selectedOption, setSelectedOption] = useState(null)
+  // Multi-select state (for select-all type)
+  const [selectedOptions, setSelectedOptions] = useState([])
   const [confidence, setConfidence] = useState(3)
 
   const question = questions[index]
+  const isSelectAll = question.followUp.type === 'select-all'
   const progressPct = ((index + (phase === 'followup' ? 0.5 : 0)) / questions.length) * 100
+
+  const hasSelection = isSelectAll ? selectedOptions.length > 0 : selectedOption !== null
 
   function handleUnderstanding(value) {
     if (value === 'no') {
@@ -26,17 +33,25 @@ export default function Survey({ questions, onComplete }) {
     } else {
       setAnswers([...answers, { understanding: value }])
       setSelectedOption(null)
+      setSelectedOptions([])
       setConfidence(3)
       setPhase('followup')
     }
   }
 
+  function toggleOption(id) {
+    setSelectedOptions(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
   function handleFollowUpSubmit() {
-    if (selectedOption === null) return
+    if (!hasSelection) return
+    const followUpAnswer = isSelectAll ? [...selectedOptions].sort() : selectedOption
     const updated = [...answers]
     updated[updated.length - 1] = {
       ...updated[updated.length - 1],
-      followUpAnswer: selectedOption,
+      followUpAnswer,
       confidence,
     }
     setAnswers(updated)
@@ -88,17 +103,36 @@ export default function Survey({ questions, onComplete }) {
         <div className="card">
           <div className="followup-eyebrow">Check your understanding</div>
           <p className="question-text">{question.followUp.prompt}</p>
+
+          {isSelectAll && (
+            <p className="select-all-hint">Select all that apply.</p>
+          )}
+
           <div className="options-list">
-            {question.followUp.options.map(opt => (
-              <button
-                key={opt.id}
-                className={`option-btn ${selectedOption === opt.id ? 'option-btn--selected' : ''}`}
-                onClick={() => setSelectedOption(opt.id)}
-              >
-                <span className="option-letter">{opt.id.toUpperCase()}</span>
-                <span className="option-text">{opt.text}</span>
-              </button>
-            ))}
+            {question.followUp.options.map(opt => {
+              const selected = isSelectAll
+                ? selectedOptions.includes(opt.id)
+                : selectedOption === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  className={[
+                    'option-btn',
+                    selected && 'option-btn--selected',
+                    isSelectAll && 'option-btn--checkbox',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => isSelectAll ? toggleOption(opt.id) : setSelectedOption(opt.id)}
+                >
+                  <span className="option-marker" aria-hidden="true">
+                    {isSelectAll
+                      ? (selected ? '☑' : '☐')
+                      : opt.id.toUpperCase()
+                    }
+                  </span>
+                  <span className="option-text">{opt.text}</span>
+                </button>
+              )
+            })}
           </div>
 
           <div className="confidence-block">
@@ -122,7 +156,7 @@ export default function Survey({ questions, onComplete }) {
           <button
             className="btn-primary"
             onClick={handleFollowUpSubmit}
-            disabled={selectedOption === null}
+            disabled={!hasSelection}
           >
             Next
           </button>

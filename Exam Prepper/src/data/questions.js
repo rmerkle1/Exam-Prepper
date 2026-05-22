@@ -150,6 +150,70 @@ export const QUESTIONS = {
       },
     },
 
+    {
+      id: 'covalent-nomenclature',
+      chapter: 2,
+      topic: 'Nomenclature — Covalent Compounds',
+      question: 'Do you know the IUPAC prefix rules for naming covalent (molecular) compounds — including when to use "mono-" and how to handle vowel drops?',
+      followUp: {
+        type: 'select-all',
+        prompt: 'Which of the following covalent compound name–formula pairs are written correctly? Select all that apply.',
+        options: [
+          { id: 'a', text: 'N₂O₄  —  Nitrogen tetroxide' },
+          { id: 'b', text: 'CCl₄  —  Carbon tetrachloride' },
+          { id: 'c', text: 'SO₃  —  Disulfur trioxide' },
+          { id: 'd', text: 'NO₂  —  Nitrogen dioxide' },
+        ],
+        correctIds: ['b', 'd'],
+        // A is wrong: N₂ needs "di-" prefix → dinitrogen tetroxide
+        // B is correct: no "mono" for first element; tetra- for 4 Cl
+        // C is wrong: only one S → sulfur trioxide, not disulfur
+        // D is correct: no "mono" for first element; di- for 2 O
+      },
+    },
+    {
+      id: 'ionic-transition-metal',
+      chapter: 2,
+      topic: 'Nomenclature — Ionic Compounds (Transition Metals)',
+      question: 'Can you determine the charge of a transition metal ion in an ionic compound and correctly name it using Roman numerals?',
+      followUp: {
+        type: 'select-all',
+        prompt: 'Which of the following ionic compound formula–name pairs are written correctly? Select all that apply.',
+        options: [
+          { id: 'a', text: 'FeCl₂  —  Iron(II) chloride' },
+          { id: 'b', text: 'CuO  —  Copper oxide' },
+          { id: 'c', text: 'MnO₂  —  Manganese(IV) oxide' },
+          { id: 'd', text: 'Fe₂O₃  —  Iron(II) oxide' },
+        ],
+        correctIds: ['a', 'c'],
+        // A correct: 2 Cl⁻ → Fe must be 2+ → iron(II) chloride ✓
+        // B wrong: Cu can be +1 or +2 — Roman numeral required → copper(II) oxide
+        // C correct: 2 O²⁻ = 4− → Mn must be 4+ → manganese(IV) oxide ✓
+        // D wrong: 3 O²⁻ = 6− shared by 2 Fe → each Fe is 3+ → iron(III) oxide
+      },
+    },
+    {
+      id: 'oxoacid-nomenclature',
+      chapter: 2,
+      topic: 'Nomenclature — Oxoacids',
+      question: 'Do you know the naming rules for oxoacids — using "-ic acid" for oxyanions ending in "-ate" and "-ous acid" for those ending in "-ite"?',
+      followUp: {
+        type: 'select-all',
+        prompt: 'Which of the following oxoacid formula–name pairs are written correctly? Select all that apply.',
+        options: [
+          { id: 'a', text: 'H₂SO₄  —  Sulfuric acid' },
+          { id: 'b', text: 'HNO₂  —  Nitric acid' },
+          { id: 'c', text: 'H₃PO₃  —  Phosphorous acid' },
+          { id: 'd', text: 'HClO₃  —  Hypochlorous acid' },
+        ],
+        correctIds: ['a', 'c'],
+        // A correct: sulfate (SO₄²⁻) → sulfuric acid ✓
+        // B wrong: HNO₂ comes from nitrite (NO₂⁻) → nitrous acid, not nitric
+        // C correct: phosphite (PO₃³⁻) → phosphorous acid ✓
+        // D wrong: HClO₃ comes from chlorate (ClO₃⁻) → chloric acid; hypochlorous acid is HClO
+      },
+    },
+
     // ── Chapter 3: Composition of Substances & Solutions ──────────────────
     {
       id: 'molar-mass-conversion',
@@ -213,6 +277,46 @@ export const QUESTIONS = {
           { id: 'd', text: 'V₁ = 0.300 × 500 × 12.0 = 1,800 mL  (multiplied all three values together)' },
         ],
         correctId: 'b',
+      },
+    },
+    {
+      id: 'molarity-conversion',
+      chapter: 3,
+      topic: 'Molarity as a Conversion Factor',
+      question: 'Can you use molarity (mol/L) as a conversion factor in a dimensional analysis chain to find moles of solute from a given solution volume?',
+      followUp: {
+        prompt: 'How many moles of NaCl are in 250 mL of a 2.00 M NaCl solution? Which setup is correct?',
+        options: [
+          { id: 'a', text: '250 mL × (1000 mL / 1 L) × (2.00 mol / 1 L)' },
+          { id: 'b', text: '250 mL × (1 L / 1000 mL) × (2.00 mol / 1 L) = 0.500 mol' },
+          { id: 'c', text: '250 mL × (2.00 mol / 1 L) = 500 mol' },
+          { id: 'd', text: '250 mL × (1 L / 1000 mL) × (1 L / 2.00 mol)' },
+        ],
+        correctId: 'b',
+        // A wrong: mL→L conversion is inverted (multiplies by 1000 instead of dividing)
+        // B correct: mL→L first, then mol/L gives mol ✓
+        // C wrong: skipped the mL→L conversion; units don't cancel
+        // D wrong: molarity is inverted (L/mol instead of mol/L)
+      },
+    },
+    {
+      id: 'grams-to-molecules',
+      chapter: 3,
+      topic: 'Grams → Moles → Molecules',
+      question: 'Can you set up a dimensional analysis chain to convert a mass in grams to a number of molecules, using molar mass and Avogadro\'s number as conversion factors?',
+      followUp: {
+        prompt: 'How many molecules are in 9.00 g of H₂O? (Molar mass H₂O = 18.02 g/mol, Nₐ = 6.022 × 10²³ mol⁻¹) Which setup is correct?',
+        options: [
+          { id: 'a', text: '9.00 g × (18.02 g / 1 mol) × (6.022 × 10²³ molecules / 1 mol)' },
+          { id: 'b', text: '9.00 g × (1 mol / 18.02 g) × (6.022 × 10²³ molecules / 1 mol) = 3.01 × 10²³ molecules' },
+          { id: 'c', text: '9.00 g × (1 mol / 18.02 g) × (1 mol / 6.022 × 10²³ molecules)' },
+          { id: 'd', text: '9.00 g × (6.022 × 10²³ molecules / 1 mol)' },
+        ],
+        correctId: 'b',
+        // A wrong: molar mass is inverted (g/mol used as mol/g) — grams don't cancel
+        // B correct: g → mol → molecules, all units cancel ✓
+        // C wrong: Avogadro's number is inverted; gives mol²/molecules instead of molecules
+        // D wrong: skipped g→mol step; grams never cancel
       },
     },
   ],

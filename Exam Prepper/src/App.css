@@ -389,12 +389,32 @@
   background: #eff6ff;
 }
 
-.option-letter {
+.option-marker {
   font-weight: 700;
   color: var(--accent);
-  min-width: 1.1rem;
+  min-width: 1.25rem;
   flex-shrink: 0;
   padding-top: 1px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Checkbox style for select-all questions */
+.option-btn--checkbox .option-marker {
+  font-size: 1.1rem;
+}
+
+.option-btn--checkbox.option-btn--selected .option-marker {
+  color: var(--accent);
+}
+
+/* Hint text above select-all options */
+.select-all-hint {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.625rem;
+  margin-top: -0.25rem;
 }
 
 .option-text {
