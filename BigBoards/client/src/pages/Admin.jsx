@@ -377,6 +377,164 @@ function BoardsPanel() {
   );
 }
 
+// ── BBall Reference Sync ───────────────────────────────────────────────────────
+function SyncPanel() {
+  const [classes, setClasses] = useState([]);
+  const [draftYear, setDraftYear] = useState('');
+  const [seasonYear, setSeasonYear] = useState('');
+  const [isFinal, setIsFinal] = useState(false);
+  const [log, setLog] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api.get('/draft-classes').then(cs => {
+      setClasses(cs);
+      if (cs[0]) {
+        setDraftYear(String(cs[0].year));
+        setSeasonYear(String(cs[0].year + 1));
+      }
+    }).catch(() => {});
+  }, []);
+
+  function appendLog(lines) {
+    setLog(prev => [...prev, ...(Array.isArray(lines) ? lines : [lines])]);
+  }
+
+  async function handleDraftSync() {
+    if (!draftYear) return;
+    setLoading(true); setErr(''); setLog([]);
+    appendLog(`Syncing ${draftYear} draft picks from Basketball Reference...`);
+    try {
+      const r = await api.post(`/admin/scrape/draft/${draftYear}`, {});
+      appendLog(r.log || []);
+      appendLog(`✓ Done: ${r.inserted} inserted, ${r.updated} updated`);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSeasonSync() {
+    if (!draftYear || !seasonYear) return;
+    setLoading(true); setErr(''); setLog([]);
+    appendLog(`Syncing ${draftYear} draft class — ${seasonYear} season stats + awards...`);
+    appendLog('This makes 3 requests to Basketball Reference (~12 seconds)...');
+    try {
+      const r = await api.post(`/admin/scrape/season/${draftYear}/${seasonYear}`, { is_final: isFinal });
+      appendLog(r.log || []);
+      appendLog(`✓ Done: ${r.matched}/${r.total} players matched`);
+      if (r.not_found?.length) appendLog(`No stats: ${r.not_found.join(', ')}`);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePreview() {
+    if (!draftYear) return;
+    setLoading(true); setErr(''); setLog([]);
+    appendLog(`Previewing ${draftYear} draft (first 10 picks)...`);
+    try {
+      const r = await api.get(`/admin/scrape/draft/${draftYear}/preview`);
+      appendLog(`Found ${r.count} picks:`);
+      r.picks.forEach(p => appendLog(`  #${p.draft_pick} ${p.name} (${p.draft_team}) [${p.bball_ref_id}]`));
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputCls = "bg-navy-800 border border-navy-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500";
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 30 }, (_, i) => currentYear - i);
+
+  return (
+    <div>
+      <div className="bg-navy-800 border border-navy-600 rounded-xl p-5 mb-6">
+        <h3 className="font-semibold text-white mb-1">Basketball Reference Sync</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Scrapes player data from Basketball Reference. Requests are spaced 3.5s apart to avoid rate limiting.
+          Run Draft Sync first to populate players, then Season Sync to pull stats and awards.
+        </p>
+
+        <div className="flex flex-wrap gap-4 mb-5">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Draft Year</label>
+            <select value={draftYear} onChange={e => setDraftYear(e.target.value)} className={inputCls}>
+              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Season Year (ends in)</label>
+            <select value={seasonYear} onChange={e => setSeasonYear(e.target.value)} className={inputCls}>
+              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <p className="text-xs text-gray-600 mt-0.5">e.g. 2025 = 2024–25 season</p>
+          </div>
+          <div className="flex items-end pb-0.5">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={isFinal} onChange={e => setIsFinal(e.target.checked)}
+                className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm text-orange-400">Mark season as final</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button onClick={handlePreview} disabled={loading}
+            className="border border-navy-500 hover:border-gray-400 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50">
+            Preview Draft Picks
+          </button>
+          <button onClick={handleDraftSync} disabled={loading}
+            className="bg-navy-700 hover:bg-navy-600 border border-navy-500 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+            {loading ? 'Working...' : 'Sync Draft Picks'}
+          </button>
+          <button onClick={handleSeasonSync} disabled={loading}
+            className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+            {loading ? 'Working...' : 'Sync Season Stats + Awards'}
+          </button>
+        </div>
+      </div>
+
+      {err && (
+        <div className="bg-red-900/40 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3 mb-4">{err}</div>
+      )}
+
+      {log.length > 0 && (
+        <div className="bg-navy-900 border border-navy-600 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Sync Log</span>
+            <button onClick={() => setLog([])} className="text-xs text-gray-600 hover:text-gray-400">Clear</button>
+          </div>
+          <div className="font-mono text-xs text-gray-300 space-y-0.5 max-h-80 overflow-y-auto">
+            {log.map((line, i) => (
+              <div key={i} className={line.startsWith('✓') ? 'text-green-400' : line.startsWith('  ') ? 'text-gray-500' : 'text-gray-300'}>
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 bg-navy-800 border border-navy-700 rounded-xl p-4 text-xs text-gray-500">
+        <p className="font-semibold text-gray-400 mb-1">Workflow</p>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Use <span className="text-orange-400">Preview Draft Picks</span> to verify BBref can reach the page</li>
+          <li>Use <span className="text-orange-400">Sync Draft Picks</span> to import the full draft (players + picks + teams)</li>
+          <li>Set Season Year to the year the season ended (e.g. 2025 for 2024–25)</li>
+          <li>Use <span className="text-orange-400">Sync Season Stats + Awards</span> to pull GP, GS, and all award flags</li>
+          <li>Check "Mark season as final" once MVP and end-of-season awards are announced</li>
+          <li>Repeat Season Sync each year to accumulate career points</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Admin ─────────────────────────────────────────────────────────────────
 export default function Admin() {
   const { user, loading } = useAuth();
@@ -395,6 +553,7 @@ export default function Admin() {
     { id: 'players', label: 'Players' },
     { id: 'season-scores', label: 'Season Scores' },
     { id: 'boards', label: 'Boards' },
+    { id: 'sync', label: 'BBall Ref Sync' },
   ];
 
   return (
@@ -404,7 +563,7 @@ export default function Admin() {
         <span className="text-sm text-orange-400 border border-orange-800 bg-orange-900/30 px-3 py-1 rounded-full">Admin</span>
       </div>
 
-      <div className="flex border-b border-navy-600 mb-6 gap-1">
+      <div className="flex border-b border-navy-600 mb-6 gap-1 overflow-x-auto">
         {tabs.map(t => <Tab key={t.id} label={t.label} active={tab === t.id} onClick={() => setTab(t.id)} />)}
       </div>
 
@@ -412,6 +571,7 @@ export default function Admin() {
       {tab === 'players' && <PlayersPanel />}
       {tab === 'season-scores' && <SeasonScoresPanel />}
       {tab === 'boards' && <BoardsPanel />}
+      {tab === 'sync' && <SyncPanel />}
     </div>
   );
 }
