@@ -159,4 +159,85 @@ router.patch('/users/:id/admin', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Unmatched board entries ────────────────────────────────────────────────────
+router.get('/unmatched-entries', (req, res) => {
+  const db = getDb();
+  const { draft_year } = req.query;
+
+  let query = `
+    SELECT bbe.id, bbe.rank, bbe.player_name, bbe.big_board_id,
+      bb.title as board_title, bb.draft_year, u.username
+    FROM big_board_entries bbe
+    JOIN big_boards bb ON bb.id = bbe.big_board_id
+    JOIN users u ON u.id = bb.user_id
+    WHERE bbe.player_id IS NULL
+  `;
+  const params = [];
+  if (draft_year) { query += ' AND bb.draft_year = ?'; params.push(parseInt(draft_year)); }
+  query += ' ORDER BY bb.draft_year DESC, bb.id ASC, bbe.rank ASC';
+
+  const entries = db.prepare(query).all(...params);
+
+  // Attach name-based suggestions for each entry
+  const withSuggestions = entries.map(entry => {
+    const name = entry.player_name.toLowerCase();
+
+    // 1. Exact match
+    let match = db.prepare(
+      'SELECT id, name FROM players WHERE draft_year = ? AND LOWER(name) = ?'
+    ).get(entry.draft_year, name);
+
+    // 2. CSV name contains DB name or vice-versa (handles "Jr." / nickname differences)
+    if (!match) {
+      match = db.prepare(
+        `SELECT id, name FROM players WHERE draft_year = ?
+         AND (LOWER(name) LIKE ? OR ? LIKE '%' || LOWER(name) || '%')
+         LIMIT 1`
+      ).get(entry.draft_year, `%${name}%`, name);
+    }
+
+    return {
+      ...entry,
+      suggested_player_id: match?.id ?? null,
+      suggested_player_name: match?.name ?? null,
+    };
+  });
+
+  res.json(withSuggestions);
+});
+
+// Bulk link: apply all suggested matches at once
+router.post('/unmatched-entries/link-suggested', (req, res) => {
+  const db = getDb();
+  const { draft_year } = req.body;
+
+  let query = `
+    SELECT bbe.id, bbe.player_name, bb.draft_year
+    FROM big_board_entries bbe
+    JOIN big_boards bb ON bb.id = bbe.big_board_id
+    WHERE bbe.player_id IS NULL
+  `;
+  const params = [];
+  if (draft_year) { query += ' AND bb.draft_year = ?'; params.push(parseInt(draft_year)); }
+
+  const entries = db.prepare(query).all(...params);
+  let linked = 0;
+
+  for (const entry of entries) {
+    const name = entry.player_name.toLowerCase();
+    const match = db.prepare(
+      `SELECT id FROM players WHERE draft_year = ?
+       AND (LOWER(name) = ? OR LOWER(name) LIKE ? OR ? LIKE '%' || LOWER(name) || '%')
+       LIMIT 1`
+    ).get(entry.draft_year, name, `%${name}%`, name);
+
+    if (match) {
+      db.prepare('UPDATE big_board_entries SET player_id = ? WHERE id = ?').run(match.id, entry.id);
+      linked++;
+    }
+  }
+
+  res.json({ ok: true, linked, total: entries.length });
+});
+
 module.exports = router;

@@ -377,6 +377,185 @@ function BoardsPanel() {
   );
 }
 
+// ── Unmatched Entries ─────────────────────────────────────────────────────────
+function UnmatchedPanel() {
+  const [classes, setClasses] = useState([]);
+  const [filterYear, setFilterYear] = useState('');
+  const [entries, setEntries] = useState([]);
+  const [players, setPlayers] = useState([]);
+  // selectedId[entryId] = chosen player_id string
+  const [selectedId, setSelectedId] = useState({});
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/draft-classes').then(cs => {
+      setClasses(cs);
+      if (cs[0]) setFilterYear(String(cs[0].year));
+    }).catch(() => {});
+  }, []);
+
+  const loadEntries = useCallback(() => {
+    if (!filterYear) return;
+    setLoading(true);
+    Promise.all([
+      api.get(`/admin/unmatched-entries?draft_year=${filterYear}`),
+      api.get(`/players?draft_year=${filterYear}`),
+    ]).then(([e, p]) => {
+      setEntries(e);
+      setPlayers(p);
+      // Pre-populate selections with suggestions
+      const initial = {};
+      e.forEach(en => {
+        if (en.suggested_player_id) initial[en.id] = String(en.suggested_player_id);
+      });
+      setSelectedId(prev => ({ ...initial, ...prev }));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [filterYear]);
+
+  useEffect(() => { loadEntries(); }, [loadEntries]);
+
+  async function handleLink(entryId) {
+    const playerId = selectedId[entryId];
+    if (!playerId) return;
+    try {
+      await api.patch(`/admin/board-entries/${entryId}/link`, { player_id: parseInt(playerId) });
+      setEntries(prev => prev.filter(e => e.id !== entryId));
+      setMsg('Linked.');
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  async function handleIgnore(entryId) {
+    // Link to null — marks as intentionally unmatched so it stops appearing
+    try {
+      await api.patch(`/admin/board-entries/${entryId}/link`, { player_id: null });
+      // It'll still show because player_id stays null; just remove from local list
+      setEntries(prev => prev.filter(e => e.id !== entryId));
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  async function handleLinkAllSuggested() {
+    if (!confirm(`Link all ${entries.filter(e => e.suggested_player_id).length} entries with suggestions?`)) return;
+    setMsg(''); setErr('');
+    try {
+      const r = await api.post('/admin/unmatched-entries/link-suggested', { draft_year: parseInt(filterYear) });
+      setMsg(`Linked ${r.linked} of ${r.total} entries.`);
+      loadEntries();
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  const inputCls = "bg-navy-800 border border-navy-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-orange-500";
+  const suggestedCount = entries.filter(e => e.suggested_player_id).length;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-gray-500">Draft Year:</label>
+          <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setSelectedId({}); }}
+            className={inputCls}>
+            {classes.map(c => <option key={c.year} value={c.year}>{c.year}</option>)}
+          </select>
+          {!loading && (
+            <span className="text-sm text-gray-500">
+              {entries.length === 0 ? 'All entries matched' : `${entries.length} unmatched`}
+              {suggestedCount > 0 && ` · ${suggestedCount} with suggestions`}
+            </span>
+          )}
+        </div>
+        {suggestedCount > 0 && (
+          <button onClick={handleLinkAllSuggested}
+            className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+            Link All Suggested ({suggestedCount})
+          </button>
+        )}
+      </div>
+
+      <Alert msg={msg} /><Alert msg={err} type="error" />
+
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Loading...</div>
+      ) : entries.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-green-400 font-semibold">All entries are matched for {filterYear}.</p>
+          <p className="text-gray-500 text-sm mt-1">Upload new boards or switch draft year to see unmatched entries.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500 border-b border-navy-600">
+                <th className="pb-2 pr-3 w-8">#</th>
+                <th className="pb-2 pr-4">CSV Name</th>
+                <th className="pb-2 pr-4">Board</th>
+                <th className="pb-2 pr-4">Match To Player</th>
+                <th className="pb-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map(entry => (
+                <tr key={entry.id} className="border-b border-navy-700">
+                  <td className="py-2.5 pr-3 text-gray-500">{entry.rank}</td>
+                  <td className="py-2.5 pr-4">
+                    <span className="text-white font-medium">{entry.player_name}</span>
+                    {entry.suggested_player_name && (
+                      <span className="block text-xs text-orange-400 mt-0.5">
+                        suggestion: {entry.suggested_player_name}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-4 text-gray-400 text-xs">
+                    <span className="block">{entry.username}</span>
+                    <span className="text-gray-600">{entry.board_title}</span>
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <select
+                      value={selectedId[entry.id] || ''}
+                      onChange={e => setSelectedId(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                      className={`${inputCls} w-full max-w-xs`}
+                    >
+                      <option value="">— select player —</option>
+                      {players.map(p => (
+                        <option key={p.id} value={p.id}>
+                          #{p.draft_pick ?? '?'} {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-2.5">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleLink(entry.id)}
+                        disabled={!selectedId[entry.id]}
+                        className="text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white font-semibold px-3 py-1 rounded-md"
+                      >
+                        Link
+                      </button>
+                      <button
+                        onClick={() => handleIgnore(entry.id)}
+                        className="text-xs text-gray-500 hover:text-gray-300"
+                        title="Remove from this list (won't be scored)"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-gray-600 mt-3">
+            Players not in the list? Add them in the Players tab first.
+            Linking updates board scores on the next Recalculate run.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── BBall Reference Sync ───────────────────────────────────────────────────────
 function SyncPanel() {
   const [classes, setClasses] = useState([]);
@@ -553,6 +732,7 @@ export default function Admin() {
     { id: 'players', label: 'Players' },
     { id: 'season-scores', label: 'Season Scores' },
     { id: 'boards', label: 'Boards' },
+    { id: 'unmatched', label: 'Unmatched Entries' },
     { id: 'sync', label: 'BBall Ref Sync' },
   ];
 
@@ -571,6 +751,7 @@ export default function Admin() {
       {tab === 'players' && <PlayersPanel />}
       {tab === 'season-scores' && <SeasonScoresPanel />}
       {tab === 'boards' && <BoardsPanel />}
+      {tab === 'unmatched' && <UnmatchedPanel />}
       {tab === 'sync' && <SyncPanel />}
     </div>
   );
