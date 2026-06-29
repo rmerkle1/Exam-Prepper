@@ -1,9 +1,8 @@
-name: Deploy MerkleyMayhem to GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
-    paths: ['MerkleyMayhem/**']
   workflow_dispatch:
 
 permissions:
@@ -18,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: MerkleyMayhem
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +24,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: MerkleyMayhem/package-lock.json
 
       - run: npm install
 
@@ -40,7 +35,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: MerkleyMayhem/dist
+          path: dist
 
   deploy:
     needs: build
