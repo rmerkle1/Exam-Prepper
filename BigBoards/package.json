@@ -1,7 +1,12 @@
 {
   "name": "bigboards",
   "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
+    "build": "cd server && npm install && cd ../client && npm install && npm run build",
+    "start": "NODE_ENV=production node server/src/index.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",

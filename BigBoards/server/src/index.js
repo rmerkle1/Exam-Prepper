@@ -16,6 +16,12 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// In production, serve the built React client
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+}
+
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/draft-classes', draftClassRoutes);
@@ -25,6 +31,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/scrape', scraperRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// SPA fallback — serve index.html for all non-API routes in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`BigBoards server running on http://localhost:${PORT}`);
