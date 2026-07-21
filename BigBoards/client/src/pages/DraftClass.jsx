@@ -89,7 +89,9 @@ export default function DraftClass() {
                     <td className="py-3 pr-4">
                       <span className={`rank-badge ${i < 3 ? 'bg-orange-500 text-white' : 'bg-navy-700 text-gray-300'}`}>{p.true_rank || '—'}</span>
                     </td>
-                    <td className="py-3 pr-4 font-medium text-white">{p.name}</td>
+                    <td className="py-3 pr-4 font-medium text-white">
+                      <Link to={`/players/${p.id}`} className="hover:text-orange-400 transition-colors">{p.name}</Link>
+                    </td>
                     <td className="py-3 pr-4 text-gray-400">{p.position || '—'}</td>
                     <td className="py-3 pr-4 text-gray-400">{p.draft_pick ? `#${p.draft_pick}` : '—'}</td>
                     <td className="py-3 text-right font-bold text-orange-400">{p.career_points ?? 0}</td>
@@ -190,7 +192,9 @@ export default function DraftClass() {
                               </span>
                             </td>
                             <td className="py-3 pr-4 font-medium text-white">
-                              {row.player ? row.player.name : `Player #${row.player_id}`}
+                              <Link to={`/players/${row.player_id}`} className="hover:text-orange-400 transition-colors">
+                                {row.player ? row.player.name : `Player #${row.player_id}`}
+                              </Link>
                             </td>
                             <td className="py-3 pr-4 text-gray-400">{row.player?.position || '—'}</td>
                             <td className="py-3 pr-4 text-gray-400">{row.player?.draft_pick ? `#${row.player.draft_pick}` : '—'}</td>

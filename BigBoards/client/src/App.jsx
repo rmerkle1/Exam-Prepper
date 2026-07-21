@@ -16,6 +16,7 @@ import AuthorProfile from './pages/AuthorProfile';
 import BoardDetail from './pages/BoardDetail';
 import ScoringRules from './pages/ScoringRules';
 import Admin from './pages/Admin';
+import PlayerProfile from './pages/PlayerProfile';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/boards/:id" element={<BoardDetail />} />
               <Route path="/scoring-rules" element={<ScoringRules />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/players/:id" element={<PlayerProfile />} />
             </Routes>
           </main>
           <Footer />

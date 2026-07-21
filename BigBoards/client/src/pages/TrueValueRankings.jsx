@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, NavLink } from 'react-router-dom';
 import { api } from '../utils/api';
 
 export default function TrueValueRankings() {
@@ -74,7 +74,9 @@ export default function TrueValueRankings() {
                       {r.true_rank}
                     </span>
                   </td>
-                  <td className="py-3 pr-4 font-medium text-white">{r.name}</td>
+                  <td className="py-3 pr-4 font-medium text-white">
+                    <Link to={`/players/${r.player_id}`} className="hover:text-orange-400 transition-colors">{r.name}</Link>
+                  </td>
                   <td className="py-3 pr-4 text-gray-400">{r.position || '—'}</td>
                   <td className="py-3 pr-4 text-gray-400">{r.draft_pick ? `#${r.draft_pick}` : '—'}</td>
                   <td className="py-3 pr-4 text-gray-400">{r.draft_team || '—'}</td>

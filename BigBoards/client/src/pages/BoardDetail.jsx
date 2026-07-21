@@ -109,8 +109,9 @@ export default function BoardDetail() {
                     <span className={`rank-badge text-xs ${e.rank <= 30 ? 'bg-navy-700 text-gray-200' : 'bg-navy-800 text-gray-400'}`}>{e.rank}</span>
                   </td>
                   <td className="py-2.5 pr-4 font-medium text-white">
-                    {e.player_name}
-                    {!e.player_id && <span className="ml-2 text-xs text-gray-600" title="Not yet matched to database player">?</span>}
+                    {e.player_id
+                      ? <Link to={`/players/${e.player_id}`} className="hover:text-orange-400 transition-colors">{e.player_name}</Link>
+                      : <>{e.player_name}<span className="ml-2 text-xs text-gray-600" title="Not yet matched to database player">?</span></>}
                   </td>
                   <td className="py-2.5 pr-3 text-center text-gray-400">{e.true_rank ?? '—'}</td>
                   <td className={`py-2.5 pr-3 text-center font-semibold ${diffColor(diff)}`}>
