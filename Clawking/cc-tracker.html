@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC Pull Tracker</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #08080f;
+      --bg2: #10101c;
+      --bg3: #16162a;
+      --border: #1e1e38;
+      --text: #d4d4e8;
+      --muted: #555570;
+      --epic: #fbbf24;
+      --epic-rgb: 251,191,36;
+      --rare: #c084fc;
+      --rare-rgb: 192,132,252;
+      --uncommon: #38bdf8;
+      --uncommon-rgb: 56,189,248;
+      --common: #4b5563;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(100deg, #fbbf24, #f97316);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+    }
+
+    select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      min-width: 240px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus { border-color: #fbbf24; }
+
+    button {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button:hover { background: #1e1e3a; border-color: #333355; }
+
+    .btn-gold {
+      background: linear-gradient(135deg, #fbbf24, #f97316);
+      border: none;
+      color: #000;
+      font-weight: 700;
+    }
+
+    .btn-gold:hover { filter: brightness(1.1); background: linear-gradient(135deg, #fbbf24, #f97316); }
+
+    .btn-notify {
+      font-size: 0.8rem;
+      padding: 6px 12px;
+    }
+
+    .btn-notify.on {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .hdr-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 20px;
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #333;
+      flex-shrink: 0;
+    }
+
+    .dot.live { background: #22c55e; animation: blink 2s infinite; }
+    .dot.error { background: #ef4444; }
+    .dot.loading { background: #fbbf24; animation: blink 0.5s infinite; }
+
+    /* Toggle */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .toggle {
+      width: 34px; height: 18px;
+      background: #222;
+      border-radius: 9px;
+      position: relative;
+      transition: background 0.2s;
+      border: 1px solid var(--border);
+    }
+
+    .toggle.on { background: #22c55e; border-color: #22c55e; }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      top: 2px; left: 2px;
+      transition: left 0.2s;
+    }
+
+    .toggle.on::after { left: 18px; }
+
+    /* ── Main layout ─────────────────────────────────────────────────────── */
+    .main {
+      padding: 18px 20px;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* ── Notice ──────────────────────────────────────────────────────────── */
+    .notice {
+      background: rgba(251,191,36,0.07);
+      border: 1px solid rgba(251,191,36,0.2);
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 0.78rem;
+      color: #a08040;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+
+    /* ── CORS Error ──────────────────────────────────────────────────────── */
+    .cors-error {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      color: #fca5a5;
+      margin-bottom: 18px;
+      display: none;
+    }
+
+    .cors-error code {
+      display: inline-block;
+      background: #000;
+      padding: 4px 10px;
+      border-radius: 4px;
+      color: #fbbf24;
+      font-size: 0.9rem;
+      margin: 6px 0;
+    }
+
+    /* ── Rarity cards ────────────────────────────────────────────────────── */
+    .rarity-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 720px) {
+      .rarity-row { grid-template-columns: 1fr; }
+    }
+
+    .rcard {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .rcard::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: var(--tc);
+    }
+
+    .rcard.ready {
+      border-color: var(--tc);
+      box-shadow: 0 0 24px rgba(var(--trgb), 0.12);
+    }
+
+    .rcard-tier {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--tc);
+      margin-bottom: 3px;
+    }
+
+    .rcard-subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .streak-num {
+      font-size: 3rem;
+      font-weight: 900;
+      line-height: 1;
+      color: #fff;
+    }
+
+    .streak-unit {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      margin-top: 2px;
+    }
+
+    /* Progress bar */
+    .bar-track {
+      background: var(--bg3);
+      border-radius: 4px;
+      height: 7px;
+      margin-bottom: 7px;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--tc);
+      max-width: 100%;
+      transition: width 0.6s ease;
+    }
+
+    .bar-fill.overdue {
+      animation: bar-pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes bar-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    /* Expected marker */
+    .bar-marker {
+      position: absolute;
+      top: -3px;
+      width: 2px;
+      height: 13px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 1px;
+    }
+
+    .rcard-pct {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--tc);
+    }
+
+    .rcard-drought {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .ready-pill {
+      display: inline-block;
+      background: var(--tc);
+      color: #000;
+      font-size: 0.65rem;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 8px;
+      animation: pill-glow 1.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes pill-glow {
+      from { box-shadow: 0 0 4px var(--tc); }
+      to { box-shadow: 0 0 14px var(--tc), 0 0 28px var(--tc); }
+    }
+
+    .sample-warn {
+      font-size: 0.7rem;
+      color: #f97316;
+      margin-top: 5px;
+    }
+
+    /* ── Opportunity banner ──────────────────────────────────────────────── */
+    .opp-banner {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .opp-score-wrap { flex-shrink: 0; }
+
+    .opp-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    .opp-score {
+      font-size: 2.2rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .opp-desc { font-size: 0.88rem; color: #8888aa; }
+
+    .opp-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .opp-pull-now {
+      margin-left: auto;
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #f97316;
+      animation: fire 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes fire {
+      from { text-shadow: 0 0 6px #f97316; }
+      to { text-shadow: 0 0 20px #f97316, 0 0 40px #fbbf24; }
+    }
+
+    /* Score color helpers applied via inline style */
+
+    /* ── Skeleton / Loading state ────────────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+      background-size: 400% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+
+    /* ── Bottom grid ─────────────────────────────────────────────────────── */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .bottom-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    .panel-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* ── Pull list ───────────────────────────────────────────────────────── */
+    .pull-items {
+      max-height: 480px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .pull-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-bottom: 1px solid #0d0d1a;
+      transition: background 0.12s;
+    }
+
+    .pull-item:hover { background: #12122a; }
+    .pull-item:last-child { border-bottom: none; }
+
+    .pull-item.is-epic { background: rgba(251,191,36,0.04); }
+    .pull-item.is-rare { background: rgba(192,132,252,0.04); }
+    .pull-item.is-uncommon { background: rgba(56,189,248,0.04); }
+
+    .pull-thumb {
+      width: 38px; height: 38px;
+      border-radius: 5px;
+      object-fit: cover;
+      background: var(--bg3);
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .pull-thumb-placeholder {
+      width: 38px; height: 38px;
+      border-radius: 5px;
+      background: var(--bg3);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--border);
+      font-size: 1.2rem;
+    }
+
+    .pull-info { flex: 1; min-width: 0; }
+
+    .pull-name {
+      font-size: 0.8rem;
+      color: #bbbbd8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pull-badges {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 3px;
+    }
+
+    .tier-badge {
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .pull-value {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #7777aa;
+    }
+
+    .pull-time {
+      font-size: 0.72rem;
+      color: var(--muted);
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    /* ── Stats table ─────────────────────────────────────────────────────── */
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .stats-table th {
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stats-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #0d0d1a;
+    }
+
+    .drought-count {
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .drought-exp {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .stats-table tr:last-child td { border-bottom: none; }
+    .stats-table tr:hover td { background: #0f0f20; }
+
+    .load-more-wrap {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    /* ── Empty / loading states ──────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 20px;
+      color: var(--muted);
+      gap: 10px;
+    }
+
+    .empty-icon { font-size: 2rem; opacity: 0.3; }
+
+    .spinner-inline {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: #fbbf24;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CC Pull Tracker</div>
+
+  <select id="machineSelect">
+    <option value="">Loading machines...</option>
+  </select>
+
+  <button class="btn-gold" onclick="manualRefresh()">Refresh Now</button>
+
+  <label class="toggle-wrap" onclick="toggleAutoRefresh()">
+    <div class="toggle" id="arToggle"></div>
+    <span id="arLabel">Auto (30s)</span>
+  </label>
+
+  <div class="hdr-right">
+    <button class="btn-notify" id="notifyBtn" onclick="toggleNotifications()">Enable Alerts</button>
+    <div class="status-pill">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Select a machine</span>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+  <div class="notice">
+    Each pull is an independent random event — past streaks do not affect future odds (gambler's fallacy).
+    This tracker shows drought lengths vs. statistical expectations for entertainment. Pull at your own risk.
+  </div>
+
+  <div class="cors-error" id="corsError">
+    <div style="font-size:1rem;font-weight:700;margin-bottom:8px">CORS Blocked</div>
+    <div style="font-size:0.85rem;margin-bottom:10px">
+      Your browser blocked the API request. Run this file through a local server:
+    </div>
+    <code>python3 -m http.server 8080</code>
+    <div style="font-size:0.82rem;margin-top:8px">Then open <strong>http://localhost:8080/cc-tracker.html</strong></div>
+  </div>
+
+  <!-- Rarity readiness cards -->
+  <div class="rarity-row" id="rarityRow">
+    <div class="rcard" style="--tc:#38bdf8;--trgb:56,189,248">
+      <div class="rcard-tier">Uncommon</div>
+      <div class="empty-state"><span class="empty-icon">...</span></div>
+    </div>
+    <div class="rcard" style="--tc:#c084fc;--trgb:192,132,252">
+      <div class="rcard-tier">Rare</div>
+      <div class="empty-state"><span class="empty-icon">...</span></div>
+    </div>
+    <div class="rcard" style="--tc:#fbbf24;--trgb:251,191,36">
+      <div class="rcard-tier">Epic</div>
+      <div class="empty-state"><span class="empty-icon">...</span></div>
+    </div>
+  </div>
+
+  <!-- Opportunity banner -->
+  <div class="opp-banner" id="oppBanner" style="display:none"></div>
+
+  <!-- Bottom grid: pulls + stats -->
+  <div class="bottom-grid">
+    <div class="panel" id="pullPanel">
+      <div class="panel-header">
+        <span class="panel-title">Recent Pulls</span>
+        <span class="panel-sub" id="pullCount"></span>
+      </div>
+      <div class="empty-state"><span class="empty-icon">&#x1F4E6;</span><span>Select a machine above</span></div>
+    </div>
+
+    <div class="panel" id="statsPanel">
+      <div class="panel-header">
+        <span class="panel-title">Distribution</span>
+      </div>
+      <div class="empty-state" style="padding:30px"><span>No data</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const API = 'https://gacha.collectorcrypt.com/api';
+
+// prize_tier from API: 1=epic, 2=rare, 3=uncommon, 4=common
+const TIER_CFG = {
+  1: { key: 'epic',     label: 'Epic',     color: '#fbbf24', rgb: '251,191,36',  dark: true  },
+  2: { key: 'rare',     label: 'Rare',     color: '#c084fc', rgb: '192,132,252', dark: true  },
+  3: { key: 'uncommon', label: 'Uncommon', color: '#38bdf8', rgb: '56,189,248',  dark: false },
+  4: { key: 'common',   label: 'Common',   color: '#4b5563', rgb: '75,85,99',    dark: false },
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+
+const S = {
+  machines: [],
+  machine: null,
+  pulls: [],
+  loading: false,
+  lastUpdate: null,
+  autoRefresh: false,
+  arTimer: null,
+  notifications: false,
+  prevAllReady: false,
+};
+
+// ── API ──────────────────────────────────────────────────────────────────────
+
+async function apiFetch(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function loadMachines() {
+  const d = await apiFetch('/machines');
+  return (d.machines || []).filter(m => m.odds);
+}
+
+async function loadWinners(packType, beforeIso = null) {
+  let qs = `/getAllWinners?packType=${encodeURIComponent(packType)}&count=200`;
+  if (beforeIso) qs += `&timestamp=${encodeURIComponent(beforeIso)}`;
+  const d = await apiFetch(qs);
+  return d.data || [];
+}
+
+// ── Statistics ───────────────────────────────────────────────────────────────
+
+// For each tier T (1=epic, 2=rare, 3=uncommon), compute:
+//   streak  = pulls since last pull with prize_tier <= T
+//   expected = 1 / P(prize_tier <= T)
+// This uses the "or better" interpretation:
+//   a rare pull also resets the uncommon counter, etc.
+
+
+function computeStreaks(pulls) {
+  const result = {};
+  for (let t = 1; t <= 3; t++) {
+    let count = 0, capped = true;
+    for (const p of pulls) { // newest first
+      if (p.prize_tier === t) { capped = false; break; } // exact tier only — epics don't reset rares, etc.
+      count++;
+    }
+    result[t] = { count, capped };
+  }
+  return result;
+}
+
+function buildStatRows(machine, pulls, streaks) {
+  const rows = [];
+  for (let t = 1; t <= 3; t++) {
+    const cfg = TIER_CFG[t];
+    const odds = machine.odds[cfg.key] || 0;
+    const expected = Math.round(1 / odds); // individual tier odds, not cumulative
+    const { count, capped } = streaks[t];
+    const readiness = count / expected;
+    const droughtP = Math.pow(1 - odds, count); // P(this exact tier missed this many times)
+    rows.push({ t, cfg, odds, expected, count, capped, readiness, droughtP, ready: count >= expected });
+  }
+  return rows;
+}
+
+function computeValueStats(pulls) {
+  const vals = pulls.map(p => p.insuredValue).filter(v => typeof v === 'number' && !isNaN(v));
+  if (!vals.length) return { median: null, avg: null };
+  const sorted = [...vals].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+  return { median: Math.round(median * 10) / 10, avg: Math.round(avg * 10) / 10 };
+}
+
+function computeTierAvgs(pulls) {
+  const byTier = { 1: [], 2: [], 3: [], 4: [] };
+  pulls.forEach(p => {
+    const v = p.insuredValue;
+    if (typeof v === 'number' && !isNaN(v)) {
+      (byTier[p.prize_tier] || byTier[4]).push(v);
+    }
+  });
+  const result = {};
+  for (const [t, vals] of Object.entries(byTier)) {
+    result[t] = vals.length
+      ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10
+      : null;
+  }
+  return result;
+}
+
+function opportunityScore(statRows) {
+  // weighted: epic 50%, rare 30%, uncommon 20%
+  const weights = [0.5, 0.3, 0.2]; // index 0=epic,1=rare,2=uncommon
+  let raw = 0;
+  statRows.forEach((r, i) => {
+    raw += Math.min(r.readiness, 2) * weights[i];
+  });
+  // at 1.0 readiness all = 5.0 / 10; max = 10.0
+  return Math.min(raw * 10, 10);
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+function render() {
+  if (!S.machine || !S.pulls.length) return;
+  const streaks = computeStreaks(S.pulls);
+  const statRows = buildStatRows(S.machine, S.pulls, streaks);
+  const score = opportunityScore(statRows);
+  const valueStats = computeValueStats(S.pulls);
+  const tierAvgs = computeTierAvgs(S.pulls);
+
+  renderRarityCards(statRows);
+  renderOppBanner(statRows, score);
+  renderPullList(S.pulls.slice(0, 60));
+  renderStatsTable(statRows, valueStats, tierAvgs);
+  checkNotification(statRows);
+}
+
+function renderRarityCards(rows) {
+  const container = document.getElementById('rarityRow');
+  container.innerHTML = '';
+
+  // Display order: uncommon(3), rare(2), epic(1)
+  [3, 2, 1].forEach(t => {
+    const r = rows.find(x => x.t === t);
+    const cfg = r.cfg;
+    const barW = Math.min(r.readiness, 1) * 100;
+    const pctLabel = Math.round(r.readiness * 100);
+
+    let color;
+    if (r.readiness >= 1.5)      color = '#ef4444';
+    else if (r.readiness >= 1.0) color = '#f97316';
+    else if (r.readiness >= 0.7) color = '#fbbf24';
+    else                          color = cfg.color;
+
+    const droughtPct = (r.droughtP * 100).toFixed(2);
+
+    container.innerHTML += `
+      <div class="rcard ${r.ready ? 'ready' : ''}" style="--tc:${cfg.color};--trgb:${cfg.rgb}">
+        <div class="rcard-tier">${cfg.label}</div>
+        <div class="rcard-subtitle">${(r.odds * 100).toFixed(0)}% chance &nbsp;|&nbsp; ~${r.expected} pulls avg</div>
+
+        <div class="streak-num">${r.capped ? '&gt;' : ''}${r.count}</div>
+        <div class="streak-unit">pulls since last ${cfg.label.toLowerCase()}</div>
+
+        <div class="bar-track">
+          <div class="bar-fill ${r.ready ? 'overdue' : ''}"
+               style="width:${barW}%; background:${cfg.color}"></div>
+          <div class="bar-marker" style="left:100%"></div>
+        </div>
+
+        <div class="rcard-pct" style="color:${color}">
+          ${pctLabel}% of expected
+          ${r.ready ? '&mdash; <strong>OVERDUE</strong>' : ''}
+        </div>
+
+        <div class="rcard-drought">
+          ${droughtPct}% chance of missing ${cfg.label.toLowerCase()} this many times in a row
+        </div>
+
+        ${r.capped ? `<div class="sample-warn">Streak may exceed loaded sample (${S.pulls.length} pulls)</div>` : ''}
+        ${r.ready ? `<div class="ready-pill" style="background:${cfg.color}">Ready</div>` : ''}
+      </div>`;
+  });
+}
+
+function scoreColor(s) {
+  if (s >= 8) return '#ef4444';
+  if (s >= 6) return '#f97316';
+  if (s >= 4) return '#fbbf24';
+  return '#22c55e';
+}
+
+function renderOppBanner(rows, score) {
+  const banner = document.getElementById('oppBanner');
+  const readyCount = rows.filter(r => r.ready).length;
+  const allReady = readyCount === 3;
+
+  let desc;
+  if (allReady)         desc = 'All three rarity tiers are statistically overdue simultaneously.';
+  else if (readyCount === 2) {
+    const missing = rows.find(r => !r.ready);
+    desc = `${readyCount}/3 tiers overdue. Waiting on <strong>${missing.cfg.label}</strong> (${Math.round(missing.readiness * 100)}% of expected).`;
+  } else if (readyCount === 1) {
+    const ready = rows.find(r => r.ready);
+    desc = `Only <strong>${ready.cfg.label}</strong> is overdue. Patience pays.`;
+  } else {
+    desc = `No tiers overdue yet. Score updates as pulls are tracked.`;
+  }
+
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <div class="opp-score-wrap">
+      <div class="opp-label">Pull Opportunity</div>
+      <div class="opp-score" style="color:${scoreColor(score)}">${score.toFixed(1)}<span style="font-size:1rem;color:var(--muted);font-weight:400"> / 10</span></div>
+    </div>
+    <div>
+      <div class="opp-desc">${desc}</div>
+      <div class="opp-sub">${S.pulls.length.toLocaleString()} pulls analyzed &mdash; last updated ${S.lastUpdate ? S.lastUpdate.toLocaleTimeString() : 'never'}</div>
+    </div>
+    ${allReady ? '<div class="opp-pull-now">&#9733; PULL NOW &#9733;</div>' : ''}`;
+}
+
+function tierClass(t) {
+  return t === 1 ? 'is-epic' : t === 2 ? 'is-rare' : t === 3 ? 'is-uncommon' : '';
+}
+
+function renderPullList(pulls) {
+  const panel = document.getElementById('pullPanel');
+  document.getElementById('pullCount').textContent = `${S.pulls.length.toLocaleString()} loaded`;
+
+  const items = pulls.map(p => {
+    const cfg = TIER_CFG[p.prize_tier] || TIER_CFG[4];
+    const imgUrl = p.nft?.content?.files?.[0]?.cc_cdn || '';
+    const cardName =
+      p.nft?.content?.metadata?.attributes?.find(a => a.trait_type === 'Card Name')?.value ||
+      p.nft?.content?.metadata?.name || 'Unknown Card';
+    const timeAgo = fmtAgo(new Date(p.created_at));
+    const thumb = imgUrl
+      ? `<img class="pull-thumb" src="${escHtml(imgUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="pull-thumb-placeholder">?</div>`;
+    const textColor = cfg.dark ? '#000' : '#fff';
+
+    return `<div class="pull-item ${tierClass(p.prize_tier)}">
+      ${thumb}
+      <div class="pull-info">
+        <div class="pull-name">${escHtml(cardName)}</div>
+        <div class="pull-badges">
+          <span class="tier-badge" style="background:${cfg.color};color:${textColor}">${cfg.label}</span>
+          <span class="pull-value">$${p.insuredValue}</span>
+        </div>
+      </div>
+      <div class="pull-time">${timeAgo}</div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="panel-header">
+      <span class="panel-title">Recent Pulls</span>
+      <span class="panel-sub" id="pullCount">${S.pulls.length.toLocaleString()} loaded</span>
+    </div>
+    <div class="pull-items">${items}</div>
+    ${S.pulls.length >= 200 ? `
+    <div class="load-more-wrap">
+      <button onclick="loadMoreHistory()">Load More History</button>
+    </div>` : ''}`;
+}
+
+function renderStatsTable(statRows, valueStats, tierAvgs) {
+  const panel = document.getElementById('statsPanel');
+
+  const tierKeys = { 1: 'epic', 2: 'rare', 3: 'uncommon', 4: 'common' };
+  const counts = { epic: 0, rare: 0, uncommon: 0, common: 0 };
+  S.pulls.forEach(p => { counts[tierKeys[p.prize_tier] || 'common']++; });
+  const total = S.pulls.length;
+
+  const allTiers = [
+    ...statRows,
+    { t: 4, cfg: TIER_CFG[4], odds: S.machine.odds.common || 0, count: null, expected: null, ready: false, capped: false }
+  ];
+
+  const rows = allTiers.map(r => {
+    const actual = counts[r.cfg.key];
+    const actualPct = total ? ((actual / total) * 100).toFixed(1) : '-';
+    const expectedPct = (r.odds * 100).toFixed(0);
+    const drift = total ? Math.abs(parseFloat(actualPct) - parseFloat(expectedPct)) : 0;
+    const driftColor = drift > 3 ? '#f97316' : '#7777aa';
+    const avgVal = tierAvgs[r.t] != null ? `$${tierAvgs[r.t]}` : '—';
+
+    const streakCell = r.t <= 3
+      ? `<td>
+           <div class="drought-count" style="color:${r.ready ? '#22c55e' : 'var(--text)'}">
+             ${r.count}${r.capped ? '+' : ''}
+           </div>
+           <div class="drought-exp">of ${r.expected}</div>
+         </td>`
+      : `<td style="color:var(--muted)">—</td>`;
+
+    return `<tr>
+      <td><span style="color:${r.cfg.color};font-weight:700">${r.cfg.label}</span></td>
+      <td style="color:var(--muted)">${expectedPct}%</td>
+      <td style="color:var(--muted)">${actual}</td>
+      <td style="color:${driftColor}">${actualPct}%</td>
+      <td style="color:#7777aa">${avgVal}</td>
+      ${streakCell}
+    </tr>`;
+  }).join('');
+
+  const medianLine = valueStats.median != null
+    ? `<div style="display:flex;gap:16px;font-size:0.8rem;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)">
+         <span>Median&nbsp;<strong style="color:var(--text)">$${valueStats.median}</strong></span>
+         <span>Avg&nbsp;<strong style="color:var(--text)">$${valueStats.avg}</strong></span>
+         <span style="margin-left:auto">${total} pulls</span>
+       </div>`
+    : '';
+
+  panel.innerHTML = `
+    <div class="panel-header">
+      <span class="panel-title">Distribution</span>
+    </div>
+    ${medianLine}
+    <table class="stats-table">
+      <thead>
+        <tr>
+          <th>Tier</th><th>Odds</th><th>Seen</th><th>Actual</th><th>Avg $</th><th>Drought</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+async function toggleNotifications() {
+  if (S.notifications) {
+    S.notifications = false;
+    document.getElementById('notifyBtn').textContent = 'Enable Alerts';
+    document.getElementById('notifyBtn').classList.remove('on');
+    return;
+  }
+  if (!('Notification' in window)) { alert('Browser notifications not supported.'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    S.notifications = true;
+    document.getElementById('notifyBtn').textContent = 'Alerts On';
+    document.getElementById('notifyBtn').classList.add('on');
+  } else {
+    alert('Notification permission denied.');
+  }
+}
+
+function checkNotification(statRows) {
+  const allReady = statRows.every(r => r.ready);
+  if (allReady && !S.prevAllReady && S.notifications && Notification.permission === 'granted') {
+    new Notification('CC Pull Tracker — Pull Now!', {
+      body: `All tiers overdue on ${S.machine.name}. Score: 10/10`,
+    });
+  }
+  S.prevAllReady = allReady;
+  // Flash title
+  if (allReady) {
+    document.title = '★ PULL NOW ★ — CC Tracker';
+  } else {
+    document.title = 'CC Pull Tracker';
+  }
+}
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadData() {
+  if (!S.machine || S.loading) return;
+  S.loading = true;
+  setStatus('loading', 'Loading...');
+  document.getElementById('corsError').style.display = 'none';
+
+  try {
+    // Fetch up to 3 pages (600 pulls) for initial load
+    const page1 = await loadWinners(S.machine.code);
+    S.pulls = page1;
+
+    if (page1.length === 200) {
+      const ts1 = page1[page1.length - 1].created_at;
+      const page2 = await loadWinners(S.machine.code, ts1);
+      S.pulls = [...S.pulls, ...page2];
+
+      if (page2.length === 200) {
+        const ts2 = page2[page2.length - 1].created_at;
+        const page3 = await loadWinners(S.machine.code, ts2);
+        S.pulls = [...S.pulls, ...page3];
+      }
+    }
+
+    S.lastUpdate = new Date();
+    S.loading = false;
+    setStatus('live', `Updated ${S.lastUpdate.toLocaleTimeString()}`);
+    render();
+  } catch (err) {
+    S.loading = false;
+    setStatus('error', 'Error');
+    console.error(err);
+    if (err.message.includes('Failed to fetch') || err instanceof TypeError) {
+      document.getElementById('corsError').style.display = 'block';
+    }
+  }
+}
+
+async function loadMoreHistory() {
+  if (!S.machine || S.loading || !S.pulls.length) return;
+  S.loading = true;
+  setStatus('loading', 'Loading more...');
+  try {
+    const oldest = S.pulls[S.pulls.length - 1].created_at;
+    const more = await loadWinners(S.machine.code, oldest);
+    S.pulls = [...S.pulls, ...more];
+    S.lastUpdate = new Date();
+    S.loading = false;
+    setStatus('live', `Updated ${S.lastUpdate.toLocaleTimeString()}`);
+    render();
+  } catch (err) {
+    S.loading = false;
+    setStatus('error', 'Error loading more');
+  }
+}
+
+async function refreshData() {
+  if (!S.machine || S.loading) return;
+  S.loading = true;
+  setStatus('loading', 'Refreshing...');
+  try {
+    const fresh = await loadWinners(S.machine.code);
+    const existingIds = new Set(S.pulls.map(p => p.nft_address));
+    const newPulls = fresh.filter(p => !existingIds.has(p.nft_address));
+    if (newPulls.length > 0) S.pulls = [...newPulls, ...S.pulls];
+    S.lastUpdate = new Date();
+    S.loading = false;
+    setStatus('live', `Updated ${S.lastUpdate.toLocaleTimeString()}`);
+    render();
+  } catch (err) {
+    S.loading = false;
+    setStatus('error', 'Refresh failed');
+  }
+}
+
+function manualRefresh() {
+  if (S.machine && S.pulls.length) refreshData();
+  else if (S.machine) loadData();
+}
+
+// ── Auto-refresh ─────────────────────────────────────────────────────────────
+
+function toggleAutoRefresh() {
+  S.autoRefresh = !S.autoRefresh;
+  document.getElementById('arToggle').className = `toggle ${S.autoRefresh ? 'on' : ''}`;
+  document.getElementById('arLabel').textContent = S.autoRefresh ? 'Auto: ON' : 'Auto (30s)';
+  clearInterval(S.arTimer);
+  if (S.autoRefresh) {
+    S.arTimer = setInterval(refreshData, 30_000);
+  }
+}
+
+// ── Machine select ────────────────────────────────────────────────────────────
+
+const ALLOWED_MACHINES = [
+  'pokemon_25',
+  'pokemon_50',
+  'pokemon_100',
+  'pokemon_250',
+  'onepiece_50',
+  'onepiece_250',
+  'anime_75',
+  'basketball_100',
+  'baseball_100',
+];
+
+function populateMachineSelect(machines) {
+  const sel = document.getElementById('machineSelect');
+  const filtered = ALLOWED_MACHINES
+    .map(code => machines.find(m => m.code === code))
+    .filter(Boolean);
+
+  sel.innerHTML = '<option value="">-- Select a Machine --</option>';
+  filtered.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.code;
+    opt.textContent = `${m.name} ($${m.price})`;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', e => {
+    const code = e.target.value;
+    if (!code) return;
+    S.machine = S.machines.find(m => m.code === code) || null;
+    S.pulls = [];
+    S.prevAllReady = false;
+    if (S.machine) loadData();
+  });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function setStatus(type, text) {
+  document.getElementById('statusDot').className = `dot ${type}`;
+  document.getElementById('statusText').textContent = text;
+}
+
+function fmtAgo(date) {
+  const s = Math.max(0, Math.floor((Date.now() - date) / 1000));
+  if (s < 60)    return `${s}s ago`;
+  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function escHtml(str) {
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  setStatus('loading', 'Loading machines...');
+  try {
+    S.machines = await loadMachines();
+    populateMachineSelect(S.machines);
+    setStatus('', 'Select a machine');
+  } catch (err) {
+    console.error(err);
+    setStatus('error', 'Failed to load');
+    if (err instanceof TypeError) {
+      document.getElementById('corsError').style.display = 'block';
+    } else {
+      document.getElementById('machineSelect').innerHTML = '<option>Error loading — check console</option>';
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
