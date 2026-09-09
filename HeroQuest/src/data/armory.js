@@ -13,6 +13,7 @@ export const ARMORY_ITEMS = [
     defendBonus: 0,
     desc: '+1 attack die',
     slot: 'weapon',
+    forbiddenHeroes: ['wizard'],
   },
   {
     id: 'longsword',
@@ -24,6 +25,7 @@ export const ARMORY_ITEMS = [
     desc: '+2 attack dice',
     slot: 'weapon',
     replaces: 'shortsword',
+    forbiddenHeroes: ['wizard'],
   },
   {
     id: 'broadsword',
@@ -35,6 +37,7 @@ export const ARMORY_ITEMS = [
     desc: '+3 attack dice',
     slot: 'weapon',
     replaces: ['shortsword', 'longsword'],
+    forbiddenHeroes: ['wizard'],
   },
   {
     id: 'crossbow',
@@ -45,6 +48,7 @@ export const ARMORY_ITEMS = [
     defendBonus: 0,
     desc: '+2 attack dice (ranged)',
     slot: 'ranged',
+    forbiddenHeroes: ['wizard'],
   },
 
   // ── Armour ───────────────────────────────────────────────────────────
@@ -57,6 +61,7 @@ export const ARMORY_ITEMS = [
     defendBonus: 1,
     desc: '+1 defense die',
     slot: 'armour',
+    forbiddenHeroes: ['wizard', 'elf'],
   },
   {
     id: 'plate_mail',
@@ -68,6 +73,7 @@ export const ARMORY_ITEMS = [
     desc: '+2 defense dice',
     slot: 'armour',
     replaces: 'chain_mail',
+    forbiddenHeroes: ['wizard', 'elf'],
   },
   {
     id: 'shield',
@@ -78,6 +84,7 @@ export const ARMORY_ITEMS = [
     defendBonus: 1,
     desc: '+1 defense die',
     slot: 'shield',
+    forbiddenHeroes: ['wizard'],
   },
   {
     id: 'helmet',
@@ -88,6 +95,7 @@ export const ARMORY_ITEMS = [
     defendBonus: 1,
     desc: '+1 defense die',
     slot: 'helmet',
+    forbiddenHeroes: ['wizard'],
   },
 
   // ── Potions ───────────────────────────────────────────────────────────
@@ -124,6 +132,7 @@ export function getEffectiveDefend(hero) {
 // Buy an item for a hero. Returns { updatedHero, error }.
 export function buyItem(hero, item) {
   if (hero.gold < item.cost) return { error: 'Not enough gold.' };
+  if (item.forbiddenHeroes?.includes(hero.heroId)) return { error: `${hero.name} cannot use this item.` };
 
   // Check slot conflict for slotted items
   if (item.slot) {

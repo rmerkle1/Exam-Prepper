@@ -8,6 +8,7 @@ import Armory from './components/Armory.jsx';
 import { QUESTS } from './data/quests.js';
 import { HEROES } from './data/heroes.js';
 import { SPELLS } from './data/spells.js';
+import { ARMORY_ITEMS } from './data/armory.js';
 import { buildShuffledDeck } from './data/treasureDeck.js';
 import {
   createHeroPiece,
@@ -128,6 +129,9 @@ export default function App() {
   const [planningFor, setPlanningFor] = useState(null);
   const [intents, setIntents] = useState({});
   const [targetingSpell, setTargetingSpell] = useState(null);
+  const [targetingItem, setTargetingItem] = useState(null);    // 'holy_water' | null
+  const [geniePendingHeroId, setGeniePendingHeroId] = useState(null);
+  const [wandPickerHeroId, setWandPickerHeroId] = useState(null);
   const boardRef = useRef(null);
 
   const currentQuest = QUESTS[questIndex];
@@ -185,6 +189,10 @@ export default function App() {
     if (v.type === 'kill_boss_and_stairs') {
       return g.bossKilled && currentQuest.tiles[tileY]?.[tileX] === 'stair';
     }
+    if (v.type === 'kill_all_and_stairs') {
+      const allDead = g.monsters.every(m => m.isDead);
+      return allDead && currentQuest.tiles[tileY]?.[tileX] === 'stair';
+    }
     return false;
   };
 
@@ -202,6 +210,13 @@ export default function App() {
 
   // Furniture positions for the current quest (treated as permanent traversal blockers).
   const furnitureBlockers = (currentQuest?.furniture || []).map(f => ({ x: f.x, y: f.y, isDead: false }));
+
+  // All wall tile positions as a Set of "x,y" strings (used by Pass Through Rock).
+  const getAllWallTiles = (quest) => {
+    const walls = new Set();
+    quest.tiles.forEach((row, y) => row.forEach((cell, x) => { if (cell === 'wall') walls.add(`${x},${y}`); }));
+    return walls;
+  };
 
   const visibleMonsters = (g, revealed) =>
     g ? g.monsters.filter(m => !m.isDead && revealed?.has(`${m.x},${m.y}`)) : [];
@@ -268,6 +283,7 @@ export default function App() {
       return;
     }
     if (targetingSpell) { handleSpellTarget(tile); return; }
+    if (targetingItem === 'holy_water') { handleHolyWaterTarget(tile); return; }
 
     setGame(g => {
       if (!g || g.phase !== PHASE.HERO_TURN) return g;
@@ -326,7 +342,11 @@ export default function App() {
 
         const postMoveMonsters = [...updated.monsters.filter(m => !m.isDead), ...furnitureBlockers];
         const postMoveAllOthers = [...newHeroes.filter(h => h.id !== hero.id && !h.isDead), ...postMoveMonsters];
-        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers, updated.revealedSecretDoors) : [];
+        const hasPassThroughPost = updated.buffedHeroes?.has(hero.id + ':pass_through_rock');
+        const postMoveExtra = hasPassThroughPost
+          ? new Set([...updated.revealedSecretDoors, ...getAllWallTiles(currentQuest)])
+          : updated.revealedSecretDoors;
+        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers, postMoveExtra) : [];
         setReachable(newReachable);
         setAttackable(getAdjacentPieces(tile.x, tile.y, updated.monsters.filter(m => !m.isDead)));
         return updated;
@@ -348,10 +368,13 @@ export default function App() {
         return {
           ...g,
           monsters: g.monsters.map(m => m.id === target.id ? { ...m, body: newBody, isDead } : m),
+          heroes: isDead
+            ? g.heroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + (target.gold || 0) } : h)
+            : g.heroes,
           hasActed: true,
           bossKilled: g.bossKilled || bossKilled,
           log: [...g.log, {
-            text: `${hero.name} attacks ${target.name} — ${damage} damage${isDead ? ' (killed!)' : ''}${bossKilled ? ' THE WARLORD IS DEAD!' : ''}`,
+            text: `${hero.name} attacks ${target.name} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}${bossKilled ? ' THE WARLORD IS DEAD!' : ''}`,
             color: bossKilled ? '#f39c12' : isDead ? '#e74c3c' : '#eee',
             rolls: [...attackRolls, '|', ...defendRolls],
             time: Date.now(),
@@ -361,7 +384,7 @@ export default function App() {
       return g;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reachable, attackable, planningFor, targetingSpell, game, intents, questIndex]);
+  }, [reachable, attackable, planningFor, targetingSpell, targetingItem, game, intents, questIndex]);
 
   // ─── Spells ───────────────────────────────────────────────────────────
 
@@ -388,25 +411,52 @@ export default function App() {
       const logEntry = { time: Date.now(), color: '#9b59b6' };
 
       if (spell.targeting === 'enemy') {
-        const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead);
-        if (!target) return g;
-        let damage = 0;
-        let attackRolls = [];
-        if (spell.directDamage) {
-          damage = spell.directDamage;
-          logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
-        } else if (spell.attackDice) {
-          attackRolls = rollDice(spell.attackDice);
-          const skulls = attackRolls.filter(r => r === 'skull').length;
-          damage = spell.noDefend ? skulls : Math.max(0, skulls - rollDice(target.defendDice).filter(r => r !== 'skull').length);
-          setDiceResult({ attackRolls, defendRolls: [], damage });
-          logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
+        if (spell.areaRoom) {
+          // Attack all monsters in the same floor region as the clicked tile
+          const regionKey = getRegionKey(currentQuest, tile.x, tile.y);
+          const targets = g.monsters.filter(m => !m.isDead && getRegionKey(currentQuest, m.x, m.y) === regionKey);
+          if (!targets.length) return g;
+          let goldEarned = 0;
+          updatedMonsters = g.monsters;
+          const kills = [];
+          targets.forEach(target => {
+            const attackRolls = rollDice(spell.attackDice);
+            const skulls = attackRolls.filter(r => r === 'skull').length;
+            const defendRolls = rollDice(target.defendDice);
+            const shields = defendRolls.filter(r => r === 'black_shield').length;
+            const dmg = Math.max(0, skulls - shields);
+            const newBody = Math.max(0, target.body - dmg);
+            const dead = newBody <= 0;
+            if (dead) { goldEarned += target.gold || 0; kills.push(target.name); }
+            if (dead && target.id === currentQuest.victory?.bossId) bossKilled = true;
+            updatedMonsters = updatedMonsters.map(m => m.id === target.id ? { ...m, body: newBody, isDead: dead } : m);
+          });
+          if (goldEarned > 0) updatedHeroes = updatedHeroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + goldEarned } : h);
+          logEntry.text = `${hero.name} casts ${spell.name}! Hits ${targets.length} monster${targets.length > 1 ? 's' : ''}${kills.length ? ` (${kills.join(', ')} killed! +${goldEarned}gp)` : ''}.`;
+        } else {
+          const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead);
+          if (!target) return g;
+          let damage = 0;
+          let attackRolls = [];
+          if (spell.directDamage) {
+            damage = spell.directDamage;
+            logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
+          } else if (spell.attackDice) {
+            attackRolls = rollDice(spell.attackDice);
+            const skulls = attackRolls.filter(r => r === 'skull').length;
+            damage = spell.noDefend ? skulls : Math.max(0, skulls - rollDice(target.defendDice).filter(r => r !== 'skull').length);
+            setDiceResult({ attackRolls, defendRolls: [], damage });
+            logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
+          }
+          const newBody = Math.max(0, target.body - damage);
+          const isDead = newBody <= 0;
+          if (isDead && target.id === currentQuest.victory?.bossId) bossKilled = true;
+          if (isDead) {
+            logEntry.text += ` (killed! +${target.gold || 0}gp)`;
+            updatedHeroes = updatedHeroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + (target.gold || 0) } : h);
+          }
+          updatedMonsters = g.monsters.map(m => m.id === target.id ? { ...m, body: newBody, isDead } : m);
         }
-        const newBody = Math.max(0, target.body - damage);
-        const isDead = newBody <= 0;
-        if (isDead && target.id === currentQuest.victory?.bossId) bossKilled = true;
-        if (isDead) logEntry.text += isDead ? ' (killed!)' : '';
-        updatedMonsters = g.monsters.map(m => m.id === target.id ? { ...m, body: newBody, isDead } : m);
       } else if (spell.targeting === 'ally') {
         const target = g.heroes.find(h => h.x === tile.x && h.y === tile.y && !h.isDead);
         if (!target) return g;
@@ -450,9 +500,96 @@ export default function App() {
         logEntry.text = `${hero.name} casts Tempest! All monsters stunned for one turn.`;
         return { ...g, usedSpells: newUsed, buffedHeroes: b, hasActed: true, log: [...g.log, logEntry] };
       }
+      if (spell.id === 'pass_through_rock') {
+        const b = new Set(g.buffedHeroes); b.add(hero.id + ':pass_through_rock');
+        logEntry.text = `${hero.name} casts Pass Through Rock! Walk through walls this turn.`;
+        // If movement already rolled, immediately recompute reachable with walls passable
+        if (g.hasRolledMove && g.movesLeft > 0) {
+          const ptMonsters = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
+          const ptOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...ptMonsters];
+          const ptExtra = new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)]);
+          setReachable(getReachableTiles(currentQuest, hero.x, hero.y, g.movesLeft, ptMonsters, ptOthers, ptExtra));
+        }
+        return { ...g, usedSpells: newUsed, buffedHeroes: b, log: [...g.log, logEntry] };
+      }
+      if (spell.id === 'genie') {
+        logEntry.text = `${hero.name} casts Genie! Choose a free item from the Armory.`;
+        setGeniePendingHeroId(hero.id);
+        return { ...g, usedSpells: newUsed, hasActed: true, log: [...g.log, logEntry] };
+      }
       logEntry.text = `${hero.name} casts ${spell.name}.`;
       return { ...g, usedSpells: newUsed, hasActed: true, log: [...g.log, logEntry] };
     });
+  };
+
+  // ─── Holy water targeting ──────────────────────────────────────────────
+
+  const UNDEAD_TYPES = new Set(['skeleton', 'zombie', 'mummy']);
+
+  const handleHolyWaterTarget = (tile) => {
+    setTargetingItem(null);
+    setGame(g => {
+      if (!g) return g;
+      const hero = g.heroes[g.activeHeroIndex];
+      const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead);
+      if (!target || !UNDEAD_TYPES.has(target.type)) {
+        return { ...g, log: [...g.log, { text: 'Holy Water only works on undead (skeleton, zombie, mummy).', color: '#e67e22', time: Date.now() }] };
+      }
+      const waterIdx = (hero.equipment || []).findIndex(e => e.isHolyWater);
+      const newEquip = [...(hero.equipment || [])];
+      newEquip.splice(waterIdx, 1);
+      const goldGained = target.gold || 0;
+      const bossKilled = target.id === currentQuest.victory?.bossId;
+      return {
+        ...g,
+        monsters: g.monsters.map(m => m.id === target.id ? { ...m, body: 0, isDead: true } : m),
+        heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: newEquip, gold: h.gold + goldGained } : h),
+        hasActed: true,
+        bossKilled: g.bossKilled || bossKilled,
+        log: [...g.log, { text: `${hero.name} uses Holy Water on ${target.name}! Destroyed instantly! +${goldGained}gp`, color: '#aaffaa', time: Date.now() }],
+      };
+    });
+  };
+
+  // ─── Genie item selection ──────────────────────────────────────────────
+
+  const handleGenieSelect = (item) => {
+    setGame(g => {
+      if (!g) return g;
+      const hero = g.heroes.find(h => h.id === geniePendingHeroId);
+      if (!hero) return g;
+      const replaced = Array.isArray(item.replaces) ? item.replaces : item.replaces ? [item.replaces] : [];
+      const filteredEquip = (hero.equipment || []).filter(e => !replaced.includes(e.id));
+      return {
+        ...g,
+        heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: [...filteredEquip, item] } : h),
+        log: [...g.log, { text: `${hero.name} receives ${item.name} from the Genie!`, color: '#9b59b6', time: Date.now() }],
+      };
+    });
+    setGeniePendingHeroId(null);
+  };
+
+  // ─── Wand selection ────────────────────────────────────────────────────
+
+  const handleWandSelect = (spellKey) => {
+    setGame(g => {
+      if (!g) return g;
+      const hero = g.heroes.find(h => h.id === wandPickerHeroId);
+      if (!hero) return g;
+      const newUsed = new Set(g.usedSpells);
+      newUsed.delete(`${hero.id}:${spellKey}`);
+      const wandIdx = (hero.equipment || []).findIndex(e => e.isWand);
+      const newEquip = [...(hero.equipment || [])];
+      newEquip.splice(wandIdx, 1);
+      return {
+        ...g,
+        heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: newEquip } : h),
+        usedSpells: newUsed,
+        hasActed: true,
+        log: [...g.log, { text: `${hero.name} uses the Wand of Magic! ${SPELLS[spellKey]?.name} can be cast again.`, color: '#9b59b6', time: Date.now() }],
+      };
+    });
+    setWandPickerHeroId(null);
   };
 
   // ─── Roll movement ─────────────────────────────────────────────────────
@@ -464,7 +601,11 @@ export default function App() {
       const moves = rollMovement(hero.movement);
       const monsterBlockers = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
       const allOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...monsterBlockers];
-      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers, g.revealedSecretDoors));
+      const hasPassThrough = g.buffedHeroes?.has(hero.id + ':pass_through_rock');
+      const extraPassable = hasPassThrough
+        ? new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)])
+        : g.revealedSecretDoors;
+      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers, extraPassable));
       setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
       return {
         ...g, movesLeft: moves, hasRolledMove: true,
@@ -478,6 +619,12 @@ export default function App() {
   const handleAction = (action) => {
     if (action === 'end_turn') { endTurn(); return; }
     if (action === 'use_potion') { usePotion(); return; }
+    if (action === 'use_holy_water') { setTargetingItem('holy_water'); return; }
+    if (action === 'use_wand') {
+      const hero = game?.heroes[game.activeHeroIndex];
+      if (hero) setWandPickerHeroId(hero.id);
+      return;
+    }
 
     setGame(g => {
       if (!g) return g;
@@ -519,8 +666,17 @@ export default function App() {
         const newSearchedRooms = new Set(g.searchedRooms);
         newSearchedRooms.add(roomKey);
 
+        const TREASURE_ITEM_MAP = {
+          holy_water: { id: 'holy_water', name: 'Holy Water', category: 'usable', usable: true, slot: null, desc: 'Destroys one undead monster instantly.', isHolyWater: true },
+          wand: { id: 'wand', name: 'Wand of Magic', category: 'usable', usable: true, slot: null, desc: 'Cast any one spell you know once more.', isWand: true },
+        };
         if (card.type === 'gold') updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + card.gold } : h);
-        else if (card.type === 'potion') {
+        else if (card.type === 'item') {
+          const itemObj = TREASURE_ITEM_MAP[card.id];
+          if (itemObj && !(hero.equipment || []).some(e => e.id === itemObj.id)) {
+            updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, equipment: [...(h.equipment || []), itemObj] } : h);
+          }
+        } else if (card.type === 'potion') {
           updatedHeroes = g.heroes.map(h => h.id === hero.id ? {
             ...h,
             body: card.healType === 'body' ? Math.min(h.maxBody, h.body + card.heal) : h.body,
@@ -626,7 +782,7 @@ export default function App() {
   // ─── End turn / monster AI ─────────────────────────────────────────────
 
   const endTurn = () => {
-    setReachable([]); setAttackable([]); setTargetingSpell(null);
+    setReachable([]); setAttackable([]); setTargetingSpell(null); setTargetingItem(null);
     setGame(g => {
       if (!g) return g;
       const stunned = g.buffedHeroes?.has('tempest');
@@ -640,7 +796,7 @@ export default function App() {
       const curIdx = aliveHeroes.findIndex(h => h.id === cur?.id);
       const next = aliveHeroes[(curIdx + 1) % Math.max(1, aliveHeroes.length)];
       const nextIdx = updatedHeroes.findIndex(h => h.id === next?.id);
-      const newBuffs = new Set([...(g.buffedHeroes || [])].filter(b => !b.endsWith(':rock_skin') && !b.endsWith(':veil_of_mist') && b !== 'tempest'));
+      const newBuffs = new Set([...(g.buffedHeroes || [])].filter(b => !b.endsWith(':rock_skin') && !b.endsWith(':veil_of_mist') && !b.endsWith(':pass_through_rock') && b !== 'tempest'));
 
       return {
         ...g, heroes: updatedHeroes, monsters: updatedMonsters, buffedHeroes: newBuffs,
@@ -728,6 +884,12 @@ export default function App() {
               <button onClick={() => setTargetingSpell(null)} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
             </div>
           )}
+          {targetingItem === 'holy_water' && (
+            <div style={{ background: '#0a1a0a', border: '1px solid #2ecc71', borderRadius: 8, padding: '10px 20px', color: '#aaffaa', fontSize: 14 }}>
+              Holy Water — click an undead monster (skeleton, zombie, mummy)
+              <button onClick={() => setTargetingItem(null)} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            </div>
+          )}
         </div>
 
         {/* Quest info */}
@@ -738,6 +900,7 @@ export default function App() {
           <div style={{ color: '#888' }}>{currentQuest?.name}</div>
           <div style={{ color: '#555', maxWidth: 220 }}>{currentQuest?.objective}</div>
           {game.bossKilled && <div style={{ color: '#f39c12', marginTop: 4 }}>Boss slain — reach the stairs!</div>}
+          {currentQuest?.victory?.type === 'kill_all_and_stairs' && game.monsters.every(m => m.isDead) && <div style={{ color: '#f39c12', marginTop: 4 }}>All monsters slain — reach the stairs!</div>}
           {game.npcs?.some(n => n.freed) && <div style={{ color: '#daa520', marginTop: 4 }}>{game.npcs.find(n => n.freed)?.name} freed — reach the stairs!</div>}
         </div>
 
@@ -785,6 +948,7 @@ export default function App() {
             onCastSpell={i === game.activeHeroIndex ? handleCastSpell : undefined}
             targetingSpell={i === game.activeHeroIndex ? targetingSpell : null}
             onCancelSpell={() => setTargetingSpell(null)}
+            targetingItem={i === game.activeHeroIndex ? targetingItem : null}
           />
         ))}
 
@@ -796,6 +960,57 @@ export default function App() {
 
       <DiceRoller {...(diceResult || {})} visible={!!diceResult} onClose={() => setDiceResult(null)} />
       <TreasureCard card={treasureCard?.card} heroName={treasureCard?.heroName} visible={!!treasureCard} onClose={() => setTreasureCard(null)} />
+
+      {/* Genie spell overlay */}
+      {geniePendingHeroId && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000b', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: '#1a1a2e', border: '2px solid #9b59b6', borderRadius: 12, padding: 24, maxWidth: 360, width: '90%', color: '#eee' }}>
+            <div style={{ color: '#9b59b6', fontWeight: 'bold', fontSize: 16, marginBottom: 16 }}>Genie — Choose a Free Item</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
+              {ARMORY_ITEMS.map(item => (
+                <button key={item.id} onClick={() => handleGenieSelect(item)} style={{
+                  background: '#0d0d1a', border: '1px solid #333', borderRadius: 6,
+                  padding: '8px 12px', color: '#ccc', cursor: 'pointer', textAlign: 'left', fontSize: 12,
+                }}>
+                  <strong style={{ color: '#c0963c' }}>{item.name}</strong>
+                  <span style={{ color: '#666', marginLeft: 8 }}>{item.desc}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setGeniePendingHeroId(null)} style={{ marginTop: 12, background: 'none', border: '1px solid #444', borderRadius: 6, padding: '6px 16px', color: '#888', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Wand overlay — pick a used spell to re-enable */}
+      {wandPickerHeroId && (() => {
+        const wandHero = game.heroes.find(h => h.id === wandPickerHeroId);
+        const usedHeroSpells = wandHero
+          ? Object.values(SPELLS).filter(s => game.usedSpells.has(`${wandHero.id}:${s.id}`))
+          : [];
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: '#000b', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+            <div style={{ background: '#1a1a2e', border: '2px solid #9b59b6', borderRadius: 12, padding: 24, maxWidth: 340, width: '90%', color: '#eee' }}>
+              <div style={{ color: '#9b59b6', fontWeight: 'bold', fontSize: 16, marginBottom: 16 }}>Wand of Magic — Restore a Spell</div>
+              {usedHeroSpells.length === 0
+                ? <div style={{ color: '#666', fontSize: 12 }}>No spells have been used yet.</div>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {usedHeroSpells.map(s => (
+                      <button key={s.id} onClick={() => handleWandSelect(s.id)} style={{
+                        background: '#0d0d1a', border: '1px solid #333', borderRadius: 6,
+                        padding: '8px 12px', color: '#ccc', cursor: 'pointer', textAlign: 'left', fontSize: 12,
+                      }}>
+                        {s.icon} <strong style={{ color: '#cc99ff' }}>{s.name}</strong>
+                        <span style={{ color: '#666', marginLeft: 8 }}>{s.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+              }
+              <button onClick={() => setWandPickerHeroId(null)} style={{ marginTop: 12, background: 'none', border: '1px solid #444', borderRadius: 6, padding: '6px 16px', color: '#888', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

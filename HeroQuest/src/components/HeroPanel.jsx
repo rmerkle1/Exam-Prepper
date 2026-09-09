@@ -29,6 +29,7 @@ export default function HeroPanel({
   targetingSpell,
   onCancelSpell,
   canDisarmTrap,
+  targetingItem,
 }) {
   if (!hero) return null;
   const colorHex = '#' + hero.color.toString(16).padStart(6, '0');
@@ -100,6 +101,9 @@ export default function HeroPanel({
               Moves remaining: {movesLeft}
             </div>
           )}
+          {targetingItem === 'holy_water' && (
+            <div style={{ fontSize: 10, color: '#aaffaa' }}>Click an undead monster to destroy it.</div>
+          )}
 
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             <ActionBtn onClick={() => onAction('search_treasure')} label="Search Treasure" icon="📦" />
@@ -110,6 +114,12 @@ export default function HeroPanel({
             )}
             {hasPotion && (
               <ActionBtn onClick={() => onAction('use_potion')} label="Drink Potion" icon="🧪" />
+            )}
+            {hero.equipment?.some(e => e.isHolyWater) && (
+              <ActionBtn onClick={() => onAction('use_holy_water')} label="Holy Water" icon="💧" />
+            )}
+            {hero.equipment?.some(e => e.isWand) && (
+              <ActionBtn onClick={() => onAction('use_wand')} label="Wand of Magic" icon="🪄" />
             )}
             <ActionBtn onClick={() => onAction('end_turn')} label="End Turn" danger />
           </div>

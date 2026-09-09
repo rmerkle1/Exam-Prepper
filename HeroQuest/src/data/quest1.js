@@ -19,6 +19,8 @@ export const QUEST_1 = {
   boardWidth: 26,
   boardHeight: 19,
 
+  victory: { type: 'kill_all_and_stairs' },
+
   // prettier-ignore
   tiles: [
     [V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V],

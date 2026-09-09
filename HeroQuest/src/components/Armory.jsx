@@ -49,40 +49,40 @@ function HeroCard({ hero, onBuy }) {
             {items.map(item => {
               const owned = ownedIds.has(item.id);
               const canAfford = hero.gold >= item.cost;
+              const restricted = item.forbiddenHeroes?.includes(hero.heroId);
               const replacedByOwned = (() => {
                 if (!item.replaces) return false;
-                const list = Array.isArray(item.replaces) ? item.replaces : [item.replaces];
-                // If hero owns a better item in the same slot, this item is outclassed
                 return ARMORY_ITEMS.some(better =>
                   better.slot === item.slot &&
                   (Array.isArray(better.replaces) ? better.replaces.includes(item.id) : better.replaces === item.id) &&
                   ownedIds.has(better.id)
                 );
               })();
+              const unavailable = owned || restricted || replacedByOwned;
 
               return (
                 <div key={item.id} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '4px 0', borderBottom: '1px solid #1e1e30',
-                  opacity: owned || replacedByOwned ? 0.4 : 1,
+                  opacity: unavailable ? 0.4 : 1,
                 }}>
                   <div>
                     <span style={{ fontSize: 12, color: '#ccc' }}>{item.name}</span>
                     <span style={{ fontSize: 10, color: '#666', marginLeft: 6 }}>{item.desc}</span>
                   </div>
                   <button
-                    disabled={owned || !canAfford || replacedByOwned}
+                    disabled={unavailable || !canAfford}
                     onClick={() => onBuy(item)}
                     style={{
-                      background: owned || replacedByOwned ? '#222' : canAfford ? '#1a3a1a' : '#2a1a1a',
-                      color: owned || replacedByOwned ? '#444' : canAfford ? '#4caf50' : '#c0392b',
-                      border: `1px solid ${owned || replacedByOwned ? '#333' : canAfford ? '#2e7d32' : '#7f1d1d'}`,
+                      background: unavailable ? '#222' : canAfford ? '#1a3a1a' : '#2a1a1a',
+                      color: unavailable ? '#444' : canAfford ? '#4caf50' : '#c0392b',
+                      border: `1px solid ${unavailable ? '#333' : canAfford ? '#2e7d32' : '#7f1d1d'}`,
                       borderRadius: 4, padding: '3px 8px', fontSize: 11,
-                      cursor: owned || !canAfford || replacedByOwned ? 'default' : 'pointer',
+                      cursor: unavailable || !canAfford ? 'default' : 'pointer',
                       minWidth: 60, textAlign: 'right',
                     }}
                   >
-                    {owned ? 'Owned' : replacedByOwned ? 'Outclassed' : `${item.cost} gp`}
+                    {owned ? 'Owned' : restricted ? 'Restricted' : replacedByOwned ? 'Outclassed' : `${item.cost} gp`}
                   </button>
                 </div>
               );
