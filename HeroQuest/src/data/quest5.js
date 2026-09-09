@@ -86,5 +86,16 @@ export const QUEST_5 = {
     { x: 17, y: 14, type: 'pit',   damage: 1 },
   ],
 
+  furniture: [
+    { x: 3,  y: 5,  type: 'table'     },
+    { x: 21, y: 4,  type: 'bookshelf' },
+    { x: 3,  y: 13, type: 'rack'      },
+    { x: 21, y: 14, type: 'throne'    },
+  ],
+
+  secretDoors: [
+    { x: 10, y: 11 }, // connects bottom-left chamber to bottom-right chamber
+  ],
+
   wanderingMonsterType: 'chaosWarrior',
 };

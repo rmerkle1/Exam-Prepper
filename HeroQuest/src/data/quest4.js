@@ -82,5 +82,16 @@ export const QUEST_4 = {
     { x: 13, y: 13, type: 'pit',   damage: 1 },
   ],
 
+  furniture: [
+    { x: 14, y: 2,  type: 'rack'      },
+    { x: 23, y: 2,  type: 'bookshelf' },
+    { x: 14, y: 16, type: 'table'     },
+    { x: 23, y: 16, type: 'fireplace' },
+  ],
+
+  secretDoors: [
+    { x: 5, y: 2 }, // connects top-left room to adjacent room
+  ],
+
   wanderingMonsterType: 'skeleton',
 };

@@ -21,6 +21,7 @@ export default function HeroPanel({
   isMyHero,
   movesLeft,
   onAction,
+  hasPotion,
   isPlanningFor,
   onTogglePlan,
   usedSpells,
@@ -52,7 +53,7 @@ export default function HeroPanel({
             {isMyHero ? '← YOUR TURN' : 'ACTIVE'}
           </span>
         )}
-        {!isActive && !isDead && onTogglePlan && (
+        {!isDead && onTogglePlan && (
           <button onClick={onTogglePlan} style={{
             marginLeft: 'auto', background: isPlanningFor ? '#4a2a80' : '#1a1a2e',
             border: `1px solid ${isPlanningFor ? '#8866cc' : '#333'}`,
@@ -84,10 +85,10 @@ export default function HeroPanel({
         </div>
       )}
 
-      {/* Intent display for planning hero */}
-      {isPlanningFor && !isActive && (
+      {/* Intent display for any planning hero */}
+      {isPlanningFor && (
         <div style={{ fontSize: 10, color: '#8866cc', marginBottom: 4 }}>
-          Click a tile on the board to set movement intent.
+          Click a tile on the board to set route plan.
         </div>
       )}
 
@@ -106,6 +107,9 @@ export default function HeroPanel({
             <ActionBtn onClick={() => onAction('search_secret')}   label="Secret Door"     icon="🚪" />
             {canDisarmTrap && (
               <ActionBtn onClick={() => onAction('disarm_trap')} label="Disarm Trap" icon="🔧" />
+            )}
+            {hasPotion && (
+              <ActionBtn onClick={() => onAction('use_potion')} label="Drink Potion" icon="🧪" />
             )}
             <ActionBtn onClick={() => onAction('end_turn')} label="End Turn" danger />
           </div>

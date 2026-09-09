@@ -91,5 +91,16 @@ export const QUEST_3 = {
     { x: 14, y: 14, type: 'arrow', damage: 2 },
   ],
 
+  furniture: [
+    { x: 4,  y: 5,  type: 'bookshelf' },
+    { x: 23, y: 3,  type: 'rack'      },
+    { x: 10, y: 15, type: 'table'     },
+    { x: 22, y: 14, type: 'fireplace' },
+  ],
+
+  secretDoors: [
+    { x: 12, y: 11 }, // connects big left room to boss room
+  ],
+
   wanderingMonsterType: 'orc',
 };

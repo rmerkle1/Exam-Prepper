@@ -78,5 +78,17 @@ export const QUEST_1 = {
     { x: 16, y: 9,  type: 'arrow',  damage: 2 },
   ],
 
+  furniture: [
+    { x: 3,  y: 2,  type: 'bookshelf' },
+    { x: 23, y: 2,  type: 'rack'      },
+    { x: 3,  y: 16, type: 'table'     },
+    { x: 23, y: 16, type: 'fireplace' },
+  ],
+
+  // Hidden passages in walls. Heroes search adjacent walls to find them.
+  secretDoors: [
+    { x: 6, y: 2 }, // connects top-left room to top-center room
+  ],
+
   wanderingMonsterType: 'goblin',
 };

@@ -114,8 +114,10 @@ export function getAdjacentPieces(x, y, pieces) {
 
 // traversalBlockers: pieces that physically block passage (monsters for heroes, all pieces for monsters).
 // landingBlockers: pieces whose tile cannot be the final destination (defaults to traversalBlockers).
+// extraPassable: set of "x,y" keys that are passable despite being walls (revealed secret doors).
 // Heroes can walk THROUGH other heroes but cannot end on them.
-export function getReachableTiles(quest, startX, startY, moves, traversalBlockers, landingBlockers = traversalBlockers) {
+// Returns {x, y, movesLeft} — movesLeft is remaining moves after reaching that tile.
+export function getReachableTiles(quest, startX, startY, moves, traversalBlockers, landingBlockers = traversalBlockers, extraPassable = new Set()) {
   const visited = new Map();
   const queue = [{ x: startX, y: startY, movesLeft: moves }];
   visited.set(`${startX},${startY}`, moves);
@@ -128,7 +130,7 @@ export function getReachableTiles(quest, startX, startY, moves, traversalBlocker
       const movesAfter = current.movesLeft - 1;
       if (movesAfter < 0) continue;
       if (nx < 0 || ny < 0 || nx >= quest.boardWidth || ny >= quest.boardHeight) continue;
-      if (!isPassable(quest.tiles[ny][nx])) continue;
+      if (!isPassable(quest.tiles[ny][nx]) && !extraPassable.has(key)) continue;
       if (traversalBlockers.some(p => !p.isDead && p.x === nx && p.y === ny)) continue;
       if (visited.has(key) && visited.get(key) >= movesAfter) continue;
       visited.set(key, movesAfter);
@@ -142,7 +144,7 @@ export function getReachableTiles(quest, startX, startY, moves, traversalBlocker
     .filter(k => !landingSet.has(k))
     .map(k => {
       const [x, y] = k.split(',').map(Number);
-      return { x, y };
+      return { x, y, movesLeft: visited.get(k) };
     });
 }
 
@@ -224,7 +226,8 @@ export function getRegionKey(quest, x, y) {
 // BFS path from start to target. Returns array of steps NOT including start,
 // including the target tile. Returns [] if unreachable.
 // blockingPieces: pieces that cannot be entered (target piece is allowed).
-export function bfsPath(quest, startX, startY, targetX, targetY, blockingPieces) {
+// extraPassable: set of "x,y" keys passable despite being walls (revealed secret doors).
+export function bfsPath(quest, startX, startY, targetX, targetY, blockingPieces, extraPassable = new Set()) {
   const targetKey = `${targetX},${targetY}`;
   const parent = new Map();
   parent.set(`${startX},${startY}`, null);
@@ -249,7 +252,7 @@ export function bfsPath(quest, startX, startY, targetX, targetY, blockingPieces)
       const nk = `${nx},${ny}`;
       if (parent.has(nk)) continue;
       const tile = quest.tiles[ny]?.[nx];
-      if (!isPassable(tile)) continue;
+      if (!isPassable(tile) && !extraPassable.has(nk)) continue;
       const isTarget = nx === targetX && ny === targetY;
       if (!isTarget && blockingPieces.some(p => !p.isDead && p.x === nx && p.y === ny)) continue;
       parent.set(nk, currKey);

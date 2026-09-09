@@ -88,5 +88,16 @@ export const QUEST_2 = {
     { x: 12, y: 14, type: 'pit',   damage: 1 },
   ],
 
+  furniture: [
+    { x: 3,  y: 4,  type: 'table'     },
+    { x: 21, y: 4,  type: 'bookshelf' },
+    { x: 7,  y: 16, type: 'rack'      },
+    { x: 13, y: 11, type: 'fireplace' },
+  ],
+
+  secretDoors: [
+    { x: 9, y: 11 }, // connects bottom-left room to bottom-center room
+  ],
+
   wanderingMonsterType: 'goblin',
 };

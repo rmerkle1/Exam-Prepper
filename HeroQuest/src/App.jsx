@@ -101,6 +101,7 @@ function initQuestGame(quest, campaignHeroes) {
     usedSpells: new Set(),
     buffedHeroes: new Set(),
     searchedRooms: new Set(),
+    revealedSecretDoors: new Set(),
     bossKilled: false,
     log: [
       { text: `Quest: ${quest.name}`, color: '#c0963c', time: Date.now() - 1 },
@@ -189,6 +190,19 @@ export default function App() {
 
   // ─── Helpers ─────────────────────────────────────────────────────────
 
+  // True if any visible monster occupies the same connected floor region as (x,y).
+  const roomHasMonster = (g, x, y, revealed) => {
+    const roomKey = getRegionKey(currentQuest, x, y);
+    return g.monsters.some(m =>
+      !m.isDead &&
+      revealed?.has(`${m.x},${m.y}`) &&
+      getRegionKey(currentQuest, m.x, m.y) === roomKey
+    );
+  };
+
+  // Furniture positions for the current quest (treated as permanent traversal blockers).
+  const furnitureBlockers = (currentQuest?.furniture || []).map(f => ({ x: f.x, y: f.y, isDead: false }));
+
   const visibleMonsters = (g, revealed) =>
     g ? g.monsters.filter(m => !m.isDead && revealed?.has(`${m.x},${m.y}`)) : [];
 
@@ -231,8 +245,9 @@ export default function App() {
     const others = [
       ...((game?.heroes) || []).filter(h => h.id !== hero.id && !h.isDead),
       ...((game?.monsters) || []).filter(m => !m.isDead),
+      ...furnitureBlockers,
     ];
-    const path = bfsPath(currentQuest, hero.x, hero.y, destX, destY, others);
+    const path = bfsPath(currentQuest, hero.x, hero.y, destX, destY, others, game?.revealedSecretDoors || new Set());
     if (!path.length) return;
     setIntents(prev => ({ ...prev, [hero.id]: { destX, destY, path } }));
     boardRef.current?.setIntentPath(hero.id, path, destX, destY, hero.color);
@@ -291,8 +306,9 @@ export default function App() {
 
         const newHero = { ...updated.heroes.find(h => h.id === hero.id), x: tile.x, y: tile.y };
         const newHeroes = updated.heroes.map(h => h.id === hero.id ? newHero : h);
-        const moveCost = Math.abs(tile.x - hero.x) + Math.abs(tile.y - hero.y);
-        const newMovesLeft = Math.max(0, g.movesLeft - moveCost);
+        // Use the BFS-computed movesLeft for this tile (actual path cost, not Manhattan distance)
+        const reachableTile = reachable.find(t => t.x === tile.x && t.y === tile.y);
+        const newMovesLeft = reachableTile?.movesLeft ?? 0;
         updated = { ...updated, heroes: newHeroes, movesLeft: newMovesLeft };
 
         setRevealedTiles(prev => revealFromTile(currentQuest, tile.x, tile.y, prev));
@@ -308,9 +324,9 @@ export default function App() {
           };
         }
 
-        const postMoveMonsters = updated.monsters.filter(m => !m.isDead);
+        const postMoveMonsters = [...updated.monsters.filter(m => !m.isDead), ...furnitureBlockers];
         const postMoveAllOthers = [...newHeroes.filter(h => h.id !== hero.id && !h.isDead), ...postMoveMonsters];
-        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers) : [];
+        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers, updated.revealedSecretDoors) : [];
         setReachable(newReachable);
         setAttackable(getAdjacentPieces(tile.x, tile.y, updated.monsters.filter(m => !m.isDead)));
         return updated;
@@ -412,9 +428,9 @@ export default function App() {
       const logEntry = { time: Date.now(), color: '#9b59b6' };
 
       if (spell.id === 'swift_wind') {
-        const swiftMonsters = g.monsters.filter(m => !m.isDead);
+        const swiftMonsters = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
         const swiftAllOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...swiftMonsters];
-        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftMonsters, swiftAllOthers));
+        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftMonsters, swiftAllOthers, g.revealedSecretDoors));
         setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
         logEntry.text = `${hero.name} casts Swift Wind! Move up to 12 squares.`;
         return { ...g, movesLeft: 12, hasRolledMove: true, usedSpells: newUsed, log: [...g.log, logEntry] };
@@ -446,9 +462,9 @@ export default function App() {
       if (!g || g.hasRolledMove) return g;
       const hero = g.heroes[g.activeHeroIndex];
       const moves = rollMovement(hero.movement);
-      const monsterBlockers = g.monsters.filter(m => !m.isDead);
+      const monsterBlockers = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
       const allOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...monsterBlockers];
-      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers));
+      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers, g.revealedSecretDoors));
       setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
       return {
         ...g, movesLeft: moves, hasRolledMove: true,
@@ -488,6 +504,10 @@ export default function App() {
         const roomKey = getRegionKey(currentQuest, hero.x, hero.y);
         if (roomKey === corridorKey) {
           return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} must be in a room to search for treasure.`, color: '#555', time: Date.now() }] };
+        }
+        // Cannot search while monsters are in the same room
+        if (roomHasMonster(g, hero.x, hero.y, revealedTiles)) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters in the room.`, color: '#e67e22', time: Date.now() }] };
         }
         // Each room can only be searched for treasure once
         if (g.searchedRooms.has(roomKey)) {
@@ -531,6 +551,10 @@ export default function App() {
 
       if (action === 'search_traps') {
         if (g.hasActed) return g;
+        // Cannot search while monsters are in the same room
+        if (roomHasMonster(g, hero.x, hero.y, revealedTiles)) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters in the room.`, color: '#e67e22', time: Date.now() }] };
+        }
         // Only reveal traps in the same connected floor region as the hero
         const heroRoomKey = getRegionKey(currentQuest, hero.x, hero.y);
         let found = 0;
@@ -551,10 +575,29 @@ export default function App() {
 
       if (action === 'search_secret') {
         if (g.hasActed) return g;
-        // Cannot search for secret doors while monsters are visible
-        const monstersVisible = g.monsters.some(m => !m.isDead && revealedTiles?.has(`${m.x},${m.y}`));
-        if (monstersVisible) {
-          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters nearby.`, color: '#e67e22', time: Date.now() }] };
+        // Cannot search while monsters are in the same room
+        if (roomHasMonster(g, hero.x, hero.y, revealedTiles)) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters in the room.`, color: '#e67e22', time: Date.now() }] };
+        }
+        // Check for an unrevealed secret door in an adjacent wall
+        const secretDoors = currentQuest.secretDoors || [];
+        const found = secretDoors.find(sd =>
+          !g.revealedSecretDoors.has(`${sd.x},${sd.y}`) &&
+          Math.abs(sd.x - hero.x) + Math.abs(sd.y - hero.y) === 1
+        );
+        if (found) {
+          const newRevealedDoors = new Set(g.revealedSecretDoors);
+          newRevealedDoors.add(`${found.x},${found.y}`);
+          boardRef.current?.revealSecretDoor(found.x, found.y);
+          setRevealedTiles(prev => {
+            let next = new Set(prev);
+            [[found.x+1,found.y],[found.x-1,found.y],[found.x,found.y+1],[found.x,found.y-1]].forEach(([nx,ny]) => {
+              const t = currentQuest.tiles[ny]?.[nx];
+              if (t === 'floor' || t === 'stair') next = revealFromTile(currentQuest, nx, ny, next);
+            });
+            return next;
+          });
+          return { ...g, revealedSecretDoors: newRevealedDoors, hasActed: true, log: [...g.log, { text: `${hero.name} discovers a secret door!`, color: '#f39c12', time: Date.now() }] };
         }
         return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} searches for secret doors... none found.`, color: '#666', time: Date.now() }] };
       }
@@ -737,7 +780,7 @@ export default function App() {
             hasPotion={i === game.activeHeroIndex && hasPotion}
             canDisarmTrap={i === game.activeHeroIndex && canDisarmTrap}
             isPlanningFor={planningFor === hero.id}
-            onTogglePlan={i !== game.activeHeroIndex && !hero.isDead ? () => togglePlan(hero.id) : undefined}
+            onTogglePlan={!hero.isDead ? () => togglePlan(hero.id) : undefined}
             usedSpells={i === game.activeHeroIndex ? game.usedSpells : null}
             onCastSpell={i === game.activeHeroIndex ? handleCastSpell : undefined}
             targetingSpell={i === game.activeHeroIndex ? targetingSpell : null}

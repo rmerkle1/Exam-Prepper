@@ -27,6 +27,8 @@ export class IsoScene {
     this.pieceMeshes = new Map();   // pieceId -> Group
     this.highlightMeshes = [];
     this.fogMeshes = new Map();     // "x,y" -> { mesh, fadingOut, startTime }
+    this.furnitureMeshes = new Map(); // "x,y" -> mesh[]
+    this.wallCapMeshes = new Map();   // "x,y" -> cap mesh (for secret door removal)
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this._onClickHandlers = [];
@@ -220,6 +222,11 @@ export class IsoScene {
     // Clear old fog
     this.fogMeshes.forEach(({ mesh }) => this.scene.remove(mesh));
     this.fogMeshes.clear();
+    // Clear old furniture
+    this.furnitureMeshes.forEach(meshes => meshes.forEach(m => this.scene.remove(m)));
+    this.furnitureMeshes.clear();
+    this.wallCapMeshes.forEach(m => this.scene.remove(m));
+    this.wallCapMeshes.clear();
 
     this._boardWidth = quest.boardWidth;
     this._boardHeight = quest.boardHeight;
@@ -241,6 +248,45 @@ export class IsoScene {
 
     this._cameraTarget.set(0, 0, 0);
     this._updateCameraPosition();
+
+    if (quest.furniture?.length) this._buildFurniture(quest.furniture);
+  }
+
+  _buildFurniture(furniture) {
+    furniture.forEach(({ x, y, type }) => {
+      const { wx, wz } = this._tileToWorld(x, y);
+      const meshes = [];
+
+      let h, color, w, d;
+      switch (type) {
+        case 'bookshelf': h = 1.1;  color = 0x4a2c0a; w = 0.8; d = 0.25; break;
+        case 'table':     h = 0.35; color = 0x8b6914; w = 0.75; d = 0.55; break;
+        case 'rack':      h = 0.9;  color = 0x6b3a1a; w = 0.65; d = 0.2;  break;
+        case 'fireplace': h = 0.7;  color = 0x3a2020; w = 0.8;  d = 0.45; break;
+        case 'throne':    h = 1.2;  color = 0x7a6010; w = 0.5;  d = 0.5;  break;
+        default:          h = 0.5;  color = 0x7a5a30; w = 0.6;  d = 0.5;
+      }
+
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const mat = new THREE.MeshLambertMaterial({ color });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(wx, h / 2, wz);
+      mesh.castShadow = true;
+      this.scene.add(mesh);
+      meshes.push(mesh);
+
+      // Small detail top cap for bookshelf / throne
+      if (type === 'bookshelf' || type === 'throne') {
+        const capGeo = new THREE.BoxGeometry(w + 0.05, 0.06, d + 0.05);
+        const capMat = new THREE.MeshLambertMaterial({ color: 0x2a1a06 });
+        const cap = new THREE.Mesh(capGeo, capMat);
+        cap.position.set(wx, h + 0.03, wz);
+        this.scene.add(cap);
+        meshes.push(cap);
+      }
+
+      this.furnitureMeshes.set(`${x},${y}`, meshes);
+    });
   }
 
   // Build fog overlay for all non-wall/non-void tiles. Call after buildBoard.
@@ -345,12 +391,13 @@ export class IsoScene {
     this.scene.add(mesh);
     this.tileObjects.set(`${col},${row}`, mesh);
 
-    // Wall cap
+    // Wall cap (tracked so secret door reveal can remove it)
     const capGeo = new THREE.BoxGeometry(TILE_SIZE, 0.05, TILE_SIZE);
     const capMat = new THREE.MeshLambertMaterial({ color: COLORS.wallTop });
     const cap = new THREE.Mesh(capGeo, capMat);
     cap.position.set(wx, WALL_HEIGHT - FLOOR_HEIGHT / 2, wz);
     this.scene.add(cap);
+    this.wallCapMeshes.set(`${col},${row}`, cap);
   }
 
   // ─── Pieces ──────────────────────────────────────────────────────────
@@ -543,6 +590,31 @@ export class IsoScene {
     if (!this.markerMeshes) return;
     const m = this.markerMeshes.get(trapId);
     if (m) { this.scene.remove(m); m.geometry.dispose(); m.material.dispose(); this.markerMeshes.delete(trapId); }
+  }
+
+  // ─── Secret doors ────────────────────────────────────────────────────
+
+  revealSecretDoor(x, y) {
+    const key = `${x},${y}`;
+    // Remove wall body
+    const wall = this.tileObjects.get(key);
+    if (wall) {
+      this.scene.remove(wall);
+      wall.geometry?.dispose();
+      wall.material?.dispose();
+      this.tileObjects.delete(key);
+    }
+    // Remove wall cap
+    const cap = this.wallCapMeshes.get(key);
+    if (cap) {
+      this.scene.remove(cap);
+      cap.geometry?.dispose();
+      cap.material?.dispose();
+      this.wallCapMeshes.delete(key);
+    }
+    // Add a door frame in its place
+    const { wx, wz } = this._tileToWorld(x, y);
+    this._makeFloor(x, y, 'door_h', wx, wz);
   }
 
   destroy() {

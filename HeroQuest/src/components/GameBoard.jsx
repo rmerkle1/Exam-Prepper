@@ -21,6 +21,7 @@ const GameBoard = forwardRef(function GameBoard({
     clearAllIntentPaths: () => sceneRef.current?.clearAllIntentPaths(),
     addTrapMarker: (id, x, y) => sceneRef.current?.addTrapMarker(id, x, y),
     removeTrapMarker: (id) => sceneRef.current?.removeTrapMarker(id),
+    revealSecretDoor: (x, y) => sceneRef.current?.revealSecretDoor(x, y),
   }));
 
   // Init scene once
