@@ -23,6 +23,7 @@ import {
   bfsPath,
   getEffectiveAttack,
   getEffectiveDefend,
+  getRegionKey,
   PHASE,
 } from './game/GameState.js';
 
@@ -99,6 +100,7 @@ function initQuestGame(quest, campaignHeroes) {
     treasureDeck: buildShuffledDeck(),
     usedSpells: new Set(),
     buffedHeroes: new Set(),
+    searchedRooms: new Set(),
     bossKilled: false,
     log: [
       { text: `Quest: ${quest.name}`, color: '#c0963c', time: Date.now() - 1 },
@@ -261,9 +263,20 @@ export default function App() {
       if (reachable.some(t => t.x === tile.x && t.y === tile.y)) {
         let updated = { ...g };
 
-        // Trap check
+        // Trap check — Dwarf automatically disarms traps without taking damage
         const trap = g.traps.find(t => t.x === tile.x && t.y === tile.y && !t.triggered && !t.revealed);
-        if (trap) updated = triggerTrap(updated, trap, hero.id);
+        if (trap) {
+          if (hero.heroId === 'dwarf') {
+            boardRef.current?.removeTrapMarker(trap.id);
+            updated = {
+              ...updated,
+              traps: updated.traps.map(t => t.id === trap.id ? { ...t, triggered: true, revealed: true } : t),
+              log: [...updated.log, { text: `${hero.name} disarms the ${trap.type} trap!`, color: '#2ecc71', time: Date.now() }],
+            };
+          } else {
+            updated = triggerTrap(updated, trap, hero.id);
+          }
+        }
 
         // Free NPC
         let npcs = updated.npcs || [];
@@ -456,9 +469,16 @@ export default function App() {
 
       if (action === 'search_treasure') {
         if (g.hasActed) return g;
+        // Each room can only be searched for treasure once
+        const roomKey = getRegionKey(currentQuest, hero.x, hero.y);
+        if (g.searchedRooms.has(roomKey)) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} searches... this room has already been looted.`, color: '#555', time: Date.now() }] };
+        }
         if (!g.treasureDeck.length) return { ...g, hasActed: true, log: [...g.log, { text: 'Treasure deck empty.', color: '#555', time: Date.now() }] };
         const [card, ...rest] = g.treasureDeck;
         let updatedHeroes = g.heroes, updatedMonsters = g.monsters;
+        const newSearchedRooms = new Set(g.searchedRooms);
+        newSearchedRooms.add(roomKey);
 
         if (card.type === 'gold') updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + card.gold } : h);
         else if (card.type === 'potion') {
@@ -471,10 +491,15 @@ export default function App() {
           updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, body: Math.max(0, h.body - card.damage), isDead: h.body - card.damage <= 0 } : h);
         } else if (card.type === 'monster') {
           const wanderType = currentQuest.wanderingMonsterType;
+          const allPiecePositions = [...g.heroes.filter(h => !h.isDead), ...g.monsters.filter(m => !m.isDead)];
           const candidates = [
-            { x: hero.x + 2, y: hero.y }, { x: hero.x - 2, y: hero.y },
-            { x: hero.x, y: hero.y + 2 }, { x: hero.x, y: hero.y - 2 },
-          ].filter(t => { const tile = currentQuest.tiles[t.y]?.[t.x]; return tile && tile !== 'void' && tile !== 'wall'; });
+            { x: hero.x + 1, y: hero.y }, { x: hero.x - 1, y: hero.y },
+            { x: hero.x, y: hero.y + 1 }, { x: hero.x, y: hero.y - 1 },
+          ].filter(t => {
+            const tileType = currentQuest.tiles[t.y]?.[t.x];
+            if (!tileType || tileType === 'void' || tileType === 'wall') return false;
+            return !allPiecePositions.some(p => p.x === t.x && p.y === t.y);
+          });
           if (candidates.length) {
             const spawn = candidates[Math.floor(Math.random() * candidates.length)];
             updatedMonsters = [...g.monsters, createMonsterPiece({ type: wanderType, x: spawn.x, y: spawn.y, id: `w_${Date.now()}` })];
@@ -482,7 +507,7 @@ export default function App() {
           }
         }
         setTreasureCard({ card, heroName: hero.name });
-        return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, treasureDeck: rest, hasActed: true, log: [...g.log, { text: `${hero.name} searches for treasure...`, color: '#f1c40f', time: Date.now() }] };
+        return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, treasureDeck: rest, searchedRooms: newSearchedRooms, hasActed: true, log: [...g.log, { text: `${hero.name} searches for treasure...`, color: '#f1c40f', time: Date.now() }] };
       }
 
       if (action === 'search_traps') {
@@ -502,6 +527,11 @@ export default function App() {
 
       if (action === 'search_secret') {
         if (g.hasActed) return g;
+        // Cannot search for secret doors while monsters are visible
+        const monstersVisible = g.monsters.some(m => !m.isDead && revealedTiles?.has(`${m.x},${m.y}`));
+        if (monstersVisible) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters nearby.`, color: '#e67e22', time: Date.now() }] };
+        }
         return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} searches for secret doors... none found.`, color: '#666', time: Date.now() }] };
       }
 
@@ -521,8 +551,7 @@ export default function App() {
       return {
         ...g,
         heroes: g.heroes.map(h => h.id === hero.id ? { ...h, body: newBody, mind: newMind, equipment: newEquip } : h),
-        hasActed: true,
-        log: [...g.log, { text: `${hero.name} drinks ${potion.name}.${potion.healBody ? ` +${potion.healBody} Body.` : ''}${potion.healMind ? ` +${potion.healMind} Mind.` : ''}`, color: '#2ecc71', time: Date.now() }],
+        log: [...g.log, { text: `${hero.name} drinks ${potion.name}.${potion.healBody ? ` +${potion.healBody} Body.` : ''}${potion.healMind ? ` +${potion.healMind} Mind.` : ''} (free action)`, color: '#2ecc71', time: Date.now() }],
       };
     });
   };

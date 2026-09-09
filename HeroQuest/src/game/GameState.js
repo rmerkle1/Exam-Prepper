@@ -81,7 +81,7 @@ export function rollMovement(diceCount = 2) {
 
 export function resolveCombat(attackRolls, defendRolls) {
   const skulls = attackRolls.filter(r => r === 'skull').length;
-  const shields = defendRolls.filter(r => r === 'white_shield' || r === 'black_shield').length;
+  const shields = defendRolls.filter(r => r === 'black_shield').length;
   const damage = Math.max(0, skulls - shields);
   return { skulls, shields, damage };
 }
@@ -193,6 +193,21 @@ export function getInitialRevealedTiles(quest, heroSpawns) {
   const revealed = new Set();
   heroSpawns.forEach(({ x, y }) => floodFillFloor(quest, x, y, revealed));
   return revealed;
+}
+
+// Returns a canonical string identifying the floor region containing (x, y).
+// Used to track which rooms have been searched for treasure.
+export function getRegionKey(quest, x, y) {
+  const tile = quest.tiles[y]?.[x];
+  if (tile !== 'floor' && tile !== 'stair') return `${x},${y}`;
+  const region = new Set();
+  floodFillFloor(quest, x, y, region);
+  let minX = Infinity, minY = Infinity;
+  for (const key of region) {
+    const [kx, ky] = key.split(',').map(Number);
+    if (ky < minY || (ky === minY && kx < minX)) { minX = kx; minY = ky; }
+  }
+  return `${minX},${minY}`;
 }
 
 // ─── Pathfinding ─────────────────────────────────────────────────────────────
