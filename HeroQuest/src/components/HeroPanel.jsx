@@ -27,6 +27,7 @@ export default function HeroPanel({
   onCastSpell,
   targetingSpell,
   onCancelSpell,
+  canDisarmTrap,
 }) {
   if (!hero) return null;
   const colorHex = '#' + hero.color.toString(16).padStart(6, '0');
@@ -103,6 +104,9 @@ export default function HeroPanel({
             <ActionBtn onClick={() => onAction('search_treasure')} label="Search Treasure" icon="📦" />
             <ActionBtn onClick={() => onAction('search_traps')}    label="Search Traps"    icon="🔍" />
             <ActionBtn onClick={() => onAction('search_secret')}   label="Secret Door"     icon="🚪" />
+            {canDisarmTrap && (
+              <ActionBtn onClick={() => onAction('disarm_trap')} label="Disarm Trap" icon="🔧" />
+            )}
             <ActionBtn onClick={() => onAction('end_turn')} label="End Turn" danger />
           </div>
 

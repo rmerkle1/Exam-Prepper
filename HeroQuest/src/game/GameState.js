@@ -112,7 +112,10 @@ export function getAdjacentPieces(x, y, pieces) {
   return pieces.filter(p => !p.isDead && adj.some(a => a.x === p.x && a.y === p.y));
 }
 
-export function getReachableTiles(quest, startX, startY, moves, pieces) {
+// traversalBlockers: pieces that physically block passage (monsters for heroes, all pieces for monsters).
+// landingBlockers: pieces whose tile cannot be the final destination (defaults to traversalBlockers).
+// Heroes can walk THROUGH other heroes but cannot end on them.
+export function getReachableTiles(quest, startX, startY, moves, traversalBlockers, landingBlockers = traversalBlockers) {
   const visited = new Map();
   const queue = [{ x: startX, y: startY, movesLeft: moves }];
   visited.set(`${startX},${startY}`, moves);
@@ -120,21 +123,27 @@ export function getReachableTiles(quest, startX, startY, moves, pieces) {
   while (queue.length > 0) {
     const current = queue.shift();
     for (const neighbor of getAdjacentTiles(current.x, current.y)) {
-      const key = `${neighbor.x},${neighbor.y}`;
+      const nx = neighbor.x, ny = neighbor.y;
+      const key = `${nx},${ny}`;
       const movesAfter = current.movesLeft - 1;
       if (movesAfter < 0) continue;
-      if (!isTileWalkable(quest, neighbor.x, neighbor.y, pieces)) continue;
+      if (nx < 0 || ny < 0 || nx >= quest.boardWidth || ny >= quest.boardHeight) continue;
+      if (!isPassable(quest.tiles[ny][nx])) continue;
+      if (traversalBlockers.some(p => !p.isDead && p.x === nx && p.y === ny)) continue;
       if (visited.has(key) && visited.get(key) >= movesAfter) continue;
       visited.set(key, movesAfter);
-      queue.push({ x: neighbor.x, y: neighbor.y, movesLeft: movesAfter });
+      queue.push({ x: nx, y: ny, movesLeft: movesAfter });
     }
   }
 
   visited.delete(`${startX},${startY}`);
-  return [...visited.keys()].map(k => {
-    const [x, y] = k.split(',').map(Number);
-    return { x, y };
-  });
+  const landingSet = new Set(landingBlockers.filter(p => !p.isDead).map(p => `${p.x},${p.y}`));
+  return [...visited.keys()]
+    .filter(k => !landingSet.has(k))
+    .map(k => {
+      const [x, y] = k.split(',').map(Number);
+      return { x, y };
+    });
 }
 
 // ─── Fog of war ─────────────────────────────────────────────────────────────
@@ -291,7 +300,7 @@ export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHero
       });
 
       updatedHeroes = updatedHeroes.map(h =>
-        h.id === target.id ? { ...h, body: newBody, isDead } : h
+        h.id === target.id ? { ...h, body: newBody, isDead, gold: isDead ? 0 : h.gold } : h
       );
     } else {
       // Move toward nearest hero via BFS

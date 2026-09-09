@@ -212,7 +212,7 @@ export default function App() {
     return {
       ...g,
       traps: g.traps.map(t => t.id === trap.id ? { ...t, triggered: true, revealed: true } : t),
-      heroes: g.heroes.map(h => h.id === heroId ? { ...h, body: newBody, isDead: newBody <= 0 } : h),
+      heroes: g.heroes.map(h => h.id === heroId ? { ...h, body: newBody, isDead: newBody <= 0, gold: newBody <= 0 ? 0 : h.gold } : h),
       log: [...g.log, {
         text: `${hero.name} triggered a ${trap.type} trap! −${dmg} Body Point${dmg !== 1 ? 's' : ''}${newBody <= 0 ? ' (down!)' : ''}`,
         color: '#e67e22', time: Date.now(),
@@ -308,11 +308,9 @@ export default function App() {
           };
         }
 
-        const otherPieces = [
-          ...newHeroes.filter(h => h.id !== hero.id && !h.isDead),
-          ...updated.monsters.filter(m => !m.isDead),
-        ];
-        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, otherPieces) : [];
+        const postMoveMonsters = updated.monsters.filter(m => !m.isDead);
+        const postMoveAllOthers = [...newHeroes.filter(h => h.id !== hero.id && !h.isDead), ...postMoveMonsters];
+        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers) : [];
         setReachable(newReachable);
         setAttackable(getAdjacentPieces(tile.x, tile.y, updated.monsters.filter(m => !m.isDead)));
         return updated;
@@ -414,8 +412,9 @@ export default function App() {
       const logEntry = { time: Date.now(), color: '#9b59b6' };
 
       if (spell.id === 'swift_wind') {
-        const others = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...g.monsters.filter(m => !m.isDead)];
-        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, others));
+        const swiftMonsters = g.monsters.filter(m => !m.isDead);
+        const swiftAllOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...swiftMonsters];
+        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftMonsters, swiftAllOthers));
         setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
         logEntry.text = `${hero.name} casts Swift Wind! Move up to 12 squares.`;
         return { ...g, movesLeft: 12, hasRolledMove: true, usedSpells: newUsed, log: [...g.log, logEntry] };
@@ -447,8 +446,9 @@ export default function App() {
       if (!g || g.hasRolledMove) return g;
       const hero = g.heroes[g.activeHeroIndex];
       const moves = rollMovement(hero.movement);
-      const others = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...g.monsters.filter(m => !m.isDead)];
-      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, others));
+      const monsterBlockers = g.monsters.filter(m => !m.isDead);
+      const allOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...monsterBlockers];
+      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers));
       setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
       return {
         ...g, movesLeft: moves, hasRolledMove: true,
@@ -467,10 +467,29 @@ export default function App() {
       if (!g) return g;
       const hero = g.heroes[g.activeHeroIndex];
 
+      if (action === 'disarm_trap') {
+        if (g.hasActed) return g;
+        const adjTrap = g.traps.find(t => t.revealed && !t.triggered &&
+          Math.abs(t.x - hero.x) + Math.abs(t.y - hero.y) <= 1);
+        if (!adjTrap) return g;
+        boardRef.current?.removeTrapMarker(adjTrap.id);
+        return {
+          ...g,
+          traps: g.traps.map(t => t.id === adjTrap.id ? { ...t, triggered: true } : t),
+          hasActed: true,
+          log: [...g.log, { text: `${hero.name} disarms the ${adjTrap.type} trap!`, color: '#2ecc71', time: Date.now() }],
+        };
+      }
+
       if (action === 'search_treasure') {
         if (g.hasActed) return g;
-        // Each room can only be searched for treasure once
+        // Treasure can only be searched in a room, not in the starting corridor
+        const corridorKey = getRegionKey(currentQuest, currentQuest.heroSpawns[0].x, currentQuest.heroSpawns[0].y);
         const roomKey = getRegionKey(currentQuest, hero.x, hero.y);
+        if (roomKey === corridorKey) {
+          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} must be in a room to search for treasure.`, color: '#555', time: Date.now() }] };
+        }
+        // Each room can only be searched for treasure once
         if (g.searchedRooms.has(roomKey)) {
           return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} searches... this room has already been looted.`, color: '#555', time: Date.now() }] };
         }
@@ -488,7 +507,7 @@ export default function App() {
             mind: card.healType === 'mind' ? Math.min(h.maxMind, h.mind + card.heal) : h.mind,
           } : h);
         } else if (card.type === 'trap') {
-          updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, body: Math.max(0, h.body - card.damage), isDead: h.body - card.damage <= 0 } : h);
+          updatedHeroes = g.heroes.map(h => h.id === hero.id ? { ...h, body: Math.max(0, h.body - card.damage), isDead: h.body - card.damage <= 0, gold: h.body - card.damage <= 0 ? 0 : h.gold } : h);
         } else if (card.type === 'monster') {
           const wanderType = currentQuest.wanderingMonsterType;
           const allPiecePositions = [...g.heroes.filter(h => !h.isDead), ...g.monsters.filter(m => !m.isDead)];
@@ -512,12 +531,17 @@ export default function App() {
 
       if (action === 'search_traps') {
         if (g.hasActed) return g;
+        // Only reveal traps in the same connected floor region as the hero
+        const heroRoomKey = getRegionKey(currentQuest, hero.x, hero.y);
         let found = 0;
         const newTraps = g.traps.map(t => {
-          if (!t.revealed && !t.triggered && Math.abs(t.x - hero.x) <= 5 && Math.abs(t.y - hero.y) <= 5) {
-            found++;
-            boardRef.current?.addTrapMarker(t.id, t.x, t.y);
-            return { ...t, revealed: true };
+          if (!t.revealed && !t.triggered) {
+            const trapRoomKey = getRegionKey(currentQuest, t.x, t.y);
+            if (trapRoomKey === heroRoomKey) {
+              found++;
+              boardRef.current?.addTrapMarker(t.id, t.x, t.y);
+              return { ...t, revealed: true };
+            }
           }
           return t;
         });
@@ -619,6 +643,9 @@ export default function App() {
   if (!game) return null;
   const isQuestOver = game.phase === PHASE.QUEST_COMPLETE || game.phase === PHASE.GAME_OVER;
   const hasPotion = activeHero?.equipment?.some(e => e.usable && (e.healBody || e.healMind));
+  const canDisarmTrap = activeHero?.heroId === 'dwarf' && !game.hasActed &&
+    game.traps?.some(t => t.revealed && !t.triggered &&
+      Math.abs(t.x - activeHero.x) + Math.abs(t.y - activeHero.y) <= 1);
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#0d0d1a', fontFamily: 'sans-serif', overflow: 'hidden' }}>
@@ -708,6 +735,7 @@ export default function App() {
             movesLeft={game.movesLeft}
             onAction={handleAction}
             hasPotion={i === game.activeHeroIndex && hasPotion}
+            canDisarmTrap={i === game.activeHeroIndex && canDisarmTrap}
             isPlanningFor={planningFor === hero.id}
             onTogglePlan={i !== game.activeHeroIndex && !hero.isDead ? () => togglePlan(hero.id) : undefined}
             usedSpells={i === game.activeHeroIndex ? game.usedSpells : null}
