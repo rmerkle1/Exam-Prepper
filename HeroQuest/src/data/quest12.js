@@ -1,6 +1,5 @@
-// Quest 4: Melar's Maze
-// Objective: Navigate the labyrinthine chambers and escape through the stairs.
-// Five small rooms above and below a central corridor, connected in a zigzag pattern.
+// Quest 12: Labyrinth of Bones
+// Maze-like layout filled with undead. Mummies, skeletons, and zombies everywhere.
 
 const W = 'wall';
 const F = 'floor';
@@ -9,15 +8,15 @@ const DH = 'door_h';
 const DV = 'door_v';
 const ST = 'stair';
 
-export const QUEST_4 = {
-  id: 'quest_4',
-  name: "Melar's Maze",
-  description: "Melar the sorcerer sealed his dungeon with an enchanted maze. Countless adventurers have perished within its twisting corridors. You must find the way through.",
-  objective: 'Find your way through the maze and escape through the stairs.',
+export const QUEST_12 = {
+  id: 'quest_12',
+  name: 'Labyrinth of Bones',
+  description: "Deep below the crypt lies a labyrinthine ossuary where the restless dead patrol endless corridors. The necromantic power sustaining them must be destroyed.",
+  objective: 'Destroy all undead and escape through the stairs.',
   boardWidth: 26,
   boardHeight: 19,
 
-  victory: { type: 'stairs' },
+  victory: { type: 'kill_all_and_stairs' },
 
   // prettier-ignore
   tiles: [
@@ -52,22 +51,25 @@ export const QUEST_4 = {
   npcs: [],
 
   monsters: [
-    // Top rooms — guards increase in danger left to right
-    { type: 'goblin',         x: 3,  y: 3,  id: 'm1' },
-    { type: 'orc',            x: 7,  y: 3,  id: 'm2' },
-    { type: 'orc',            x: 12, y: 3,  id: 'm3' },
-    { type: 'skeleton',x: 17, y: 3,  id: 'm4' },
-    { type: 'chaosWarrior',   x: 21, y: 3,  id: 'm5' },
+    // Top rooms — all undead
+    { type: 'zombie',   x: 3,  y: 3,  id: 'm1' },
+    { type: 'skeleton', x: 7,  y: 3,  id: 'm2' },
+    { type: 'skeleton', x: 8,  y: 4,  id: 'm3' },
+    { type: 'mummy',    x: 12, y: 3,  id: 'm4' },
+    { type: 'skeleton', x: 17, y: 3,  id: 'm5' },
+    { type: 'zombie',   x: 19, y: 4,  id: 'm6' },
+    { type: 'mummy',    x: 21, y: 3,  id: 'm7' },
     // Corridor roamers
-    { type: 'orc',            x: 11, y: 8,  id: 'm6' },
-    { type: 'skeleton',x: 19, y: 8,  id: 'm7' },
+    { type: 'skeleton', x: 11, y: 8,  id: 'm8' },
+    { type: 'zombie',   x: 19, y: 8,  id: 'm9' },
     // Bottom rooms
-    { type: 'skeleton',x: 3,  y: 12, id: 'm8' },
-    { type: 'orc',            x: 7,  y: 13, id: 'm9' },
-    { type: 'zombie',    x: 12, y: 14, id: 'm10'},
-    { type: 'chaosWarrior',   x: 17, y: 12, id: 'm11'},
-    { type: 'chaosWarrior',   x: 21, y: 12, id: 'm12'},
-    { type: 'chaosWarrior',   x: 22, y: 15, id: 'm13'},
+    { type: 'skeleton', x: 3,  y: 12, id: 'm10' },
+    { type: 'zombie',   x: 7,  y: 13, id: 'm11' },
+    { type: 'mummy',    x: 12, y: 14, id: 'm12' },
+    { type: 'skeleton', x: 17, y: 12, id: 'm13' },
+    { type: 'mummy',    x: 21, y: 12, id: 'm14' },
+    { type: 'mummy',    x: 22, y: 15, id: 'm15' },
+    { type: 'zombie',   x: 22, y: 13, id: 'm16' },
   ],
 
   treasureChests: [
@@ -85,15 +87,15 @@ export const QUEST_4 = {
   ],
 
   furniture: [
-    { x: 14, y: 2,  type: 'rack'      },
-    { x: 23, y: 2,  type: 'bookshelf' },
+    { x: 14, y: 2,  type: 'bookshelf' },
+    { x: 23, y: 2,  type: 'rack'      },
     { x: 14, y: 16, type: 'table'     },
     { x: 23, y: 16, type: 'fireplace' },
   ],
 
   secretDoors: [
-    { x: 5, y: 2 }, // connects top-left room to adjacent room
+    { x: 5, y: 11 }, // connects lower-left rooms
   ],
 
-  wanderingMonsterType: 'skeleton',
+  wanderingMonsterType: 'mummy',
 };

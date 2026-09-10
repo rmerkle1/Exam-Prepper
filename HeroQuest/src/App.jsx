@@ -33,7 +33,7 @@ const HERO_ORDER = ['barbarian', 'dwarf', 'elf', 'wizard'];
 
 // ─── Lobby ───────────────────────────────────────────────────────────────────
 
-function Lobby({ onStart }) {
+function Lobby({ onStart, onContinue, hasSave }) {
   const [selected, setSelected] = useState(['barbarian']);
   const [armoryMode, setArmoryMode] = useState('original');
   const toggle = (id) =>
@@ -90,15 +90,26 @@ function Lobby({ onStart }) {
           ))}
         </div>
       </div>
-      <button onClick={() => onStart(selected, armoryMode)} style={{
-        background: '#c0963c', color: '#1a1a1a', border: 'none',
-        borderRadius: 8, padding: '14px 40px', fontSize: 18,
-        fontWeight: 'bold', cursor: 'pointer', letterSpacing: 2,
-      }}>BEGIN CAMPAIGN</button>
+      <div style={{ display: 'flex', gap: 12, flexDirection: 'column', alignItems: 'center' }}>
+        {hasSave && (
+          <button onClick={onContinue} style={{
+            background: '#1a2e1a', color: '#eee', border: '2px solid #2ecc71',
+            borderRadius: 8, padding: '14px 40px', fontSize: 18,
+            fontWeight: 'bold', cursor: 'pointer', letterSpacing: 2,
+          }}>CONTINUE CAMPAIGN</button>
+        )}
+        <button onClick={() => onStart(selected, armoryMode)} style={{
+          background: '#c0963c', color: '#1a1a1a', border: 'none',
+          borderRadius: 8, padding: '14px 40px', fontSize: 18,
+          fontWeight: 'bold', cursor: 'pointer', letterSpacing: 2,
+        }}>BEGIN CAMPAIGN</button>
+      </div>
       <p style={{ color: '#333', marginTop: 16, fontSize: 12 }}>{QUESTS.length} quests available</p>
     </div>
   );
 }
+
+const UNDEAD_TYPES = new Set(['skeleton', 'zombie', 'mummy']);
 
 // ─── Game init ────────────────────────────────────────────────────────────────
 
@@ -139,6 +150,8 @@ export default function App() {
   const [questIndex, setQuestIndex] = useState(0);
   const [campaignHeroes, setCampaignHeroes] = useState(null); // persists across quests
   const [campaignArmoryMode, setCampaignArmoryMode] = useState('original'); // 'original'|'expanded'
+  const [preQuestHeroes, setPreQuestHeroes] = useState(null); // snapshot for retry
+  const [hasSave, setHasSave] = useState(() => !!localStorage.getItem('hq_save'));
   const [game, setGame] = useState(null);
   const [revealedTiles, setRevealedTiles] = useState(null);
   const [reachable, setReachable] = useState([]);
@@ -160,6 +173,13 @@ export default function App() {
 
   // ─── Campaign start ──────────────────────────────────────────────────
 
+  const saveCampaign = (heroes, qIdx, armoryMode) => {
+    try {
+      localStorage.setItem('hq_save', JSON.stringify({ heroes, questIndex: qIdx, armoryMode }));
+      setHasSave(true);
+    } catch (_) {}
+  };
+
   const startCampaign = (heroIds, armoryMode) => {
     const heroes = heroIds.map((id, i) =>
       createHeroPiece(id, `p${i}`, QUESTS[0].heroSpawns[i].x, QUESTS[0].heroSpawns[i].y)
@@ -167,10 +187,12 @@ export default function App() {
     setCampaignHeroes(heroes);
     setCampaignArmoryMode(armoryMode || 'original');
     setQuestIndex(0);
+    saveCampaign(heroes, 0, armoryMode || 'original');
     launchQuest(QUESTS[0], heroes);
   };
 
   const launchQuest = (quest, heroes) => {
+    setPreQuestHeroes(heroes.map(h => ({ ...h })));
     const g = initQuestGame(quest, heroes);
     setGame(g);
     setRevealedTiles(getInitialRevealedTiles(quest, quest.heroSpawns));
@@ -182,6 +204,32 @@ export default function App() {
     setScreen('game');
   };
 
+  const retryQuest = () => {
+    if (!preQuestHeroes) return;
+    const restored = preQuestHeroes.map(h => ({
+      ...h,
+      body: h.maxBody,
+      mind: h.maxMind,
+      isDead: false,
+    }));
+    setCampaignHeroes(restored);
+    launchQuest(currentQuest, restored);
+  };
+
+  const continueCampaign = () => {
+    try {
+      const raw = localStorage.getItem('hq_save');
+      if (!raw) return;
+      const { heroes, questIndex: qi, armoryMode } = JSON.parse(raw);
+      const quest = QUESTS[qi];
+      if (!quest || !heroes?.length) return;
+      setCampaignHeroes(heroes);
+      setCampaignArmoryMode(armoryMode || 'original');
+      setQuestIndex(qi);
+      launchQuest(quest, heroes);
+    } catch (_) {}
+  };
+
   const handleQuestComplete = () => {
     if (nextQuest) {
       setScreen('armory');
@@ -191,9 +239,11 @@ export default function App() {
   };
 
   const handleArmoryComplete = (updatedHeroes) => {
-    const next = QUESTS[questIndex + 1];
-    setQuestIndex(i => i + 1);
+    const nextQIdx = questIndex + 1;
+    const next = QUESTS[nextQIdx];
+    setQuestIndex(nextQIdx);
     setCampaignHeroes(updatedHeroes);
+    saveCampaign(updatedHeroes, nextQIdx, campaignArmoryMode);
     launchQuest(next, updatedHeroes);
   };
 
@@ -409,8 +459,10 @@ export default function App() {
         const fireRageBonus = g.buffedHeroes?.has(hero.id + ':fire_rage') ? 2 : 0;
         const isRangedAttack = !!rangedTarget;
         const baseDice = isRangedAttack ? getEffectiveRangedAttack(hero) : getEffectiveAttack(hero);
+        const hasTorch = (hero.equipment || []).some(e => e.id === 'torch');
+        const torchNoDefend = hasTorch && UNDEAD_TYPES.has(target.type);
         const attackRolls = rollDice(baseDice + fireRageBonus);
-        const defendRolls = rollDice(target.defendDice);
+        const defendRolls = torchNoDefend ? [] : rollDice(target.defendDice);
         const { damage } = resolveCombat(attackRolls, defendRolls);
         setDiceResult({ attackRolls, defendRolls, damage });
 
@@ -429,7 +481,7 @@ export default function App() {
           hasActed: true,
           bossKilled: g.bossKilled || bossKilled,
           log: [...g.log, {
-            text: `${hero.name} attacks ${target.name} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}${bossKilled ? ' THE WARLORD IS DEAD!' : ''}`,
+            text: `${hero.name} attacks ${target.name}${torchNoDefend ? ' 🔥 (no defend)' : ''} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}${bossKilled ? ' THE WARLORD IS DEAD!' : ''}`,
             color: bossKilled ? '#f39c12' : isDead ? '#e74c3c' : '#eee',
             rolls: [...attackRolls, '|', ...defendRolls],
             time: Date.now(),
@@ -588,8 +640,6 @@ export default function App() {
 
   // ─── Holy water targeting ──────────────────────────────────────────────
 
-  const UNDEAD_TYPES = new Set(['skeleton', 'zombie', 'mummy']);
-
   const handleHolyWaterTarget = (tile) => {
     setTargetingItem(null);
     setGame(g => {
@@ -630,8 +680,9 @@ export default function App() {
       if (!target) return g;
       const fireRageBonus = g.buffedHeroes?.has(hero.id + ':fire_rage') ? 2 : 0;
       const attackDice = hero.attackDice + (weapon.attackBonus || 0) + fireRageBonus;
+      const throwTorchNoDefend = weapon.id === 'torch' && UNDEAD_TYPES.has(target.type);
       const attackRolls = rollDice(attackDice);
-      const defendRolls = rollDice(target.defendDice);
+      const defendRolls = throwTorchNoDefend ? [] : rollDice(target.defendDice);
       const { damage } = resolveCombat(attackRolls, defendRolls);
       setDiceResult({ attackRolls, defendRolls, damage });
       const newBody = Math.max(0, target.body - damage);
@@ -647,7 +698,7 @@ export default function App() {
         hasActed: true,
         bossKilled: g.bossKilled || bossKilled,
         log: [...g.log, {
-          text: `${hero.name} throws ${weapon.name} at ${target.name} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}. Weapon lost.`,
+          text: `${hero.name} throws ${weapon.name} at ${target.name}${throwTorchNoDefend ? ' 🔥 (no defend)' : ''} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}. Weapon lost.`,
           color: isDead ? '#e74c3c' : '#eee',
           rolls: [...attackRolls, '|', ...defendRolls],
           time: Date.now(),
@@ -995,7 +1046,7 @@ export default function App() {
 
   // ─── Screens ──────────────────────────────────────────────────────────
 
-  if (screen === 'lobby') return <Lobby onStart={startCampaign} />;
+  if (screen === 'lobby') return <Lobby onStart={startCampaign} onContinue={continueCampaign} hasSave={hasSave} />;
 
   if (screen === 'armory') {
     return (
@@ -1109,10 +1160,16 @@ export default function App() {
               {game.phase === PHASE.QUEST_COMPLETE ? 'Quest Complete!' : 'All Heroes Fallen...'}
             </h2>
             {game.phase === PHASE.GAME_OVER && (
-              <button onClick={() => { setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
-                background: '#7f1d1d', color: '#eee', border: '1px solid #e74c3c',
-                borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
-              }}>Return to Lobby</button>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button onClick={retryQuest} style={{
+                  background: '#1a3a1a', color: '#eee', border: '1px solid #2ecc71',
+                  borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
+                }}>Retry Quest</button>
+                <button onClick={() => { setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
+                  background: '#7f1d1d', color: '#eee', border: '1px solid #e74c3c',
+                  borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
+                }}>Return to Lobby</button>
+              </div>
             )}
           </div>
         )}
@@ -1150,6 +1207,21 @@ export default function App() {
             targetingItem={i === game.activeHeroIndex ? targetingItem : null}
           />
         ))}
+
+        {visibleMonsters(game, revealedTiles).length > 0 && (
+          <div style={{ borderTop: '1px solid #1e1e30', paddingTop: 8, marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: '#444', marginBottom: 4, letterSpacing: 1 }}>ENEMIES IN SIGHT</div>
+            {visibleMonsters(game, revealedTiles).map(m => (
+              <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#ccc', marginBottom: 2 }}>
+                <span style={{ color: '#e74c3c' }}>{m.name}</span>
+                <span style={{ color: m.body <= 1 ? '#e74c3c' : '#888' }}>
+                  {'♥'.repeat(m.body)}{'·'.repeat(Math.max(0, m.maxBody - m.body))}
+                  <span style={{ color: '#444', marginLeft: 4 }}>{m.body}/{m.maxBody}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ marginTop: 'auto' }}>
           <div style={{ fontSize: 10, color: '#333', marginBottom: 4 }}>QUEST LOG</div>

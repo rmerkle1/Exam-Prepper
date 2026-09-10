@@ -631,6 +631,7 @@ export class IsoScene {
     this._updateCameraPosition();
 
     if (quest.furniture?.length) this._buildFurniture(quest.furniture);
+    if (quest.treasureChests?.length) this._buildChests(quest.treasureChests);
   }
 
   _buildFurniture(furniture) {
@@ -703,6 +704,41 @@ export class IsoScene {
       }
 
       this.furnitureMeshes.set(`${x},${y}`, meshes);
+    });
+  }
+
+  _buildChests(chests) {
+    chests.forEach(({ x, y }) => {
+      const { wx, wz } = this._tileToWorld(x, y);
+
+      // Body
+      const bodyGeo = new THREE.BoxGeometry(0.48, 0.22, 0.34);
+      const bodyMat = this._matWithTex('rack', 0x7a5230);
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(wx, 0.11, wz);
+      body.castShadow = true;
+      this.scene.add(body);
+
+      // Lid (slightly wider/deeper, sits on top)
+      const lidGeo = new THREE.BoxGeometry(0.50, 0.09, 0.36);
+      const lidMat = this._matWithTex('wall_top', 0x5a3210);
+      const lid = new THREE.Mesh(lidGeo, lidMat);
+      lid.position.set(wx, 0.265, wz);
+      this.scene.add(lid);
+
+      // Gold latch dot on front
+      const latchGeo = new THREE.BoxGeometry(0.09, 0.06, 0.07);
+      const latchMat = new THREE.MeshLambertMaterial({ color: 0xc8a020 });
+      const latch = new THREE.Mesh(latchGeo, latchMat);
+      latch.position.set(wx, 0.22, wz + 0.18);
+      this.scene.add(latch);
+
+      // Metal band across the lid
+      const bandGeo = new THREE.BoxGeometry(0.52, 0.04, 0.06);
+      const bandMat = new THREE.MeshLambertMaterial({ color: 0x888855 });
+      const band = new THREE.Mesh(bandGeo, bandMat);
+      band.position.set(wx, 0.285, wz);
+      this.scene.add(band);
     });
   }
 
@@ -828,32 +864,109 @@ export class IsoScene {
     const group = new THREE.Group();
     const { wx, wz } = this._tileToWorld(piece.x, piece.y);
 
+    // Per-type shape config: [bodyRadTop, bodyRadBot, bodyH, headRad, extras]
+    // extras: 'hat' | 'helmet' | 'wings' | 'octahedron' | null
+    const shapeMap = {
+      // Heroes
+      barbarian:    [0.22, 0.26, 0.52, 0.17, null],
+      dwarf:        [0.21, 0.25, 0.36, 0.16, null],
+      elf:          [0.13, 0.16, 0.56, 0.14, null],
+      wizard:       [0.10, 0.13, 0.62, 0.12, 'hat'],
+      // Monsters
+      goblin:       [0.11, 0.14, 0.28, 0.11, null],
+      skeleton:     [0.07, 0.09, 0.48, 0.10, null],
+      orc:          [0.17, 0.20, 0.43, 0.14, null],
+      zombie:       [0.19, 0.22, 0.30, 0.14, null],
+      mummy:        [0.12, 0.15, 0.58, 0.12, null],
+      chaosWarrior: [0.20, 0.24, 0.58, 0.14, 'helmet'],
+      gargoyle:     [0.22, 0.28, 0.48, 0.15, 'wings'],
+      abomination:  [0.24, 0.30, 0.35, 0.18, null],
+      orcWarlord:   [0.24, 0.30, 0.68, 0.16, 'helmet'],
+      witchLord:    [0.09, 0.12, 0.88, 0.12, 'hat'],
+    };
+
+    const key = piece.heroId || piece.type || '';
+    const [rTop, rBot, bH, hR, extra] = shapeMap[key] || [0.16, 0.20, 0.46, 0.14, null];
+
     // Base disc
-    const baseGeo = new THREE.CylinderGeometry(0.28, 0.32, 0.1, 16);
-    const baseMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    const baseGeo = new THREE.CylinderGeometry(rBot + 0.08, rBot + 0.10, 0.08, 16);
+    const baseMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
     const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.y = 0.05;
+    base.position.y = 0.04;
     group.add(base);
 
     // Body
-    const bodyGeo = new THREE.CylinderGeometry(0.18, 0.22, PIECE_HEIGHT * 0.6, 16);
-    const bodyMat = new THREE.MeshLambertMaterial({ color: piece.color });
+    const isWitchLord = key === 'witchLord';
+    const bodyMat = isWitchLord
+      ? new THREE.MeshLambertMaterial({ color: piece.color, emissive: 0x330066, emissiveIntensity: 0.6 })
+      : new THREE.MeshLambertMaterial({ color: piece.color });
+    const bodyGeo = new THREE.CylinderGeometry(rTop, rBot, bH, 12);
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = PIECE_HEIGHT * 0.3 + 0.1;
+    body.position.y = bH / 2 + 0.08;
     body.castShadow = true;
     group.add(body);
 
     // Head
-    const headGeo = new THREE.SphereGeometry(0.16, 16, 12);
-    const headMat = new THREE.MeshLambertMaterial({ color: piece.color });
+    const headY = bH + hR + 0.08;
+    const headGeo = new THREE.SphereGeometry(hR, 12, 10);
+    const headMat = isWitchLord
+      ? new THREE.MeshLambertMaterial({ color: piece.color, emissive: 0x220044, emissiveIntensity: 0.5 })
+      : new THREE.MeshLambertMaterial({ color: piece.color });
     const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = PIECE_HEIGHT * 0.6 + 0.26;
+    head.position.y = headY;
     head.castShadow = true;
     group.add(head);
 
+    const topY = headY + hR;
+
+    // Extra detail geometry
+    if (extra === 'hat') {
+      // Pointed cone hat (wizard / witch lord)
+      const hatH = isWitchLord ? 0.50 : 0.34;
+      const brimGeo = new THREE.CylinderGeometry(hR * 1.6, hR * 1.6, 0.05, 12);
+      const brim = new THREE.Mesh(brimGeo, new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+      brim.position.y = topY + 0.025;
+      group.add(brim);
+      const coneGeo = new THREE.ConeGeometry(hR * 1.1, hatH, 12);
+      const cone = new THREE.Mesh(coneGeo, new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+      cone.position.y = topY + 0.05 + hatH / 2;
+      group.add(cone);
+    } else if (extra === 'helmet') {
+      // Flat-topped cylinder helmet (chaosWarrior / orcWarlord)
+      const helmGeo = new THREE.CylinderGeometry(hR * 1.15, hR * 1.0, hR * 0.9, 10);
+      const helm = new THREE.Mesh(helmGeo, new THREE.MeshLambertMaterial({ color: 0x555566 }));
+      helm.position.y = topY + hR * 0.3;
+      group.add(helm);
+    } else if (extra === 'wings') {
+      // Two flat box "wing" nubs on gargoyle sides
+      const wingGeo = new THREE.BoxGeometry(0.06, 0.28, 0.18);
+      const wingMat = new THREE.MeshLambertMaterial({ color: piece.color });
+      [-1, 1].forEach(side => {
+        const wing = new THREE.Mesh(wingGeo, wingMat);
+        wing.position.set(side * (rBot + 0.1), bH * 0.55 + 0.08, 0);
+        wing.rotation.z = side * 0.35;
+        group.add(wing);
+      });
+    } else if (extra === 'octahedron') {
+      // NPC marker
+      const ornGeo = new THREE.OctahedronGeometry(0.1, 0);
+      const orn = new THREE.Mesh(ornGeo, new THREE.MeshLambertMaterial({ color: 0xffdd44 }));
+      orn.position.y = topY + 0.14;
+      group.add(orn);
+    }
+
+    // NPC always gets octahedron (overrides shape extra)
+    if (piece.isNPC) {
+      const ornGeo = new THREE.OctahedronGeometry(0.1, 0);
+      const orn = new THREE.Mesh(ornGeo, new THREE.MeshLambertMaterial({ color: 0xffdd44 }));
+      orn.position.y = topY + 0.14;
+      group.add(orn);
+    }
+
     // Floating name label
+    const labelY = Math.max(topY + 0.3, PIECE_HEIGHT + 0.2);
     const label = this._makeLabel(piece.name, piece.color);
-    label.position.y = PIECE_HEIGHT + 0.3;
+    label.position.y = labelY;
     group.add(label);
 
     group.position.set(wx, 0, wz);
