@@ -417,6 +417,7 @@ export default function App() {
         const isDead = newBody <= 0;
         const bossKilled = isDead && target.id === currentQuest.victory?.bossId;
         setAttackable(prev => prev.filter(m => m.id !== target.id));
+        setReachable([]);  // cannot move after attacking
 
         return {
           ...g,
@@ -466,8 +467,9 @@ export default function App() {
       if (spell.targeting === 'enemy') {
         if (spell.areaRoom) {
           // Attack all monsters in the same floor region as the clicked tile
+          if (!revealedTiles?.has(`${tile.x},${tile.y}`)) return g;
           const regionKey = getRegionKey(currentQuest, tile.x, tile.y);
-          const targets = g.monsters.filter(m => !m.isDead && getRegionKey(currentQuest, m.x, m.y) === regionKey);
+          const targets = g.monsters.filter(m => !m.isDead && revealedTiles?.has(`${m.x},${m.y}`) && getRegionKey(currentQuest, m.x, m.y) === regionKey);
           if (!targets.length) return g;
           let goldEarned = 0;
           updatedMonsters = g.monsters;
@@ -487,6 +489,7 @@ export default function App() {
           if (goldEarned > 0) updatedHeroes = updatedHeroes.map(h => h.id === hero.id ? { ...h, gold: h.gold + goldEarned } : h);
           logEntry.text = `${hero.name} casts ${spell.name}! Hits ${targets.length} monster${targets.length > 1 ? 's' : ''}${kills.length ? ` (${kills.join(', ')} killed! +${goldEarned}gp)` : ''}.`;
         } else {
+          if (!revealedTiles?.has(`${tile.x},${tile.y}`)) return g;
           const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead);
           if (!target) return g;
           let damage = 0;
@@ -617,12 +620,14 @@ export default function App() {
     setThrowingWeapon(null);
     setTargetingItem(null);
     setRangedAttackable([]);
+    setReachable([]);  // cannot move after attacking
     setGame(g => {
       if (!g || g.hasActed) return g;
       const hero = g.heroes[g.activeHeroIndex];
       const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead && revealedTiles?.has(`${m.x},${m.y}`));
       if (!target) return g;
-      const attackDice = hero.attackDice + (weapon.attackBonus || 0);
+      const fireRageBonus = g.buffedHeroes?.has(hero.id + ':fire_rage') ? 2 : 0;
+      const attackDice = hero.attackDice + (weapon.attackBonus || 0) + fireRageBonus;
       const attackRolls = rollDice(attackDice);
       const defendRolls = rollDice(target.defendDice);
       const { damage } = resolveCombat(attackRolls, defendRolls);
