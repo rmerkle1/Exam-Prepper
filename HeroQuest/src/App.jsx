@@ -394,7 +394,7 @@ export default function App() {
         const postMoveExtra = hasPassThroughPost
           ? new Set([...updated.revealedSecretDoors, ...getAllWallTiles(currentQuest)])
           : updated.revealedSecretDoors;
-        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveAllOthers, postMoveAllOthers, postMoveExtra) : [];
+        const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers, postMoveExtra) : [];
         setReachable(newReachable);
         const postMoveLiveMonsters = updated.monsters.filter(m => !m.isDead);
         computeAttackable(newHero, postMoveLiveMonsters, revealedTiles);
@@ -544,7 +544,7 @@ export default function App() {
       if (spell.id === 'swift_wind') {
         const swiftMonsters = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
         const swiftAllOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...swiftMonsters];
-        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftAllOthers, swiftAllOthers, g.revealedSecretDoors));
+        setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftMonsters, swiftAllOthers, g.revealedSecretDoors));
         setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
         logEntry.text = `${hero.name} casts Swift Wind! Move up to 12 squares.`;
         return { ...g, movesLeft: 12, hasRolledMove: true, hasSpellCast: true, usedSpells: newUsed, log: [...g.log, logEntry] };
@@ -572,7 +572,7 @@ export default function App() {
           const ptMonsters = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
           const ptOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...ptMonsters];
           const ptExtra = new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)]);
-          setReachable(getReachableTiles(currentQuest, hero.x, hero.y, g.movesLeft, ptOthers, ptOthers, ptExtra));
+          setReachable(getReachableTiles(currentQuest, hero.x, hero.y, g.movesLeft, ptMonsters, ptOthers, ptExtra));
         }
         return { ...g, usedSpells: newUsed, buffedHeroes: b, hasSpellCast: true, log: [...g.log, logEntry] };
       }
@@ -713,7 +713,7 @@ export default function App() {
       const extraPassable = hasPassThrough
         ? new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)])
         : g.revealedSecretDoors;
-      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, allOthers, allOthers, extraPassable));
+      setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers, extraPassable));
       computeAttackable(hero, g.monsters.filter(m => !m.isDead), revealedTiles);
       return {
         ...g, movesLeft: moves, hasRolledMove: true,
