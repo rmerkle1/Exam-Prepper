@@ -28,6 +28,7 @@ export const SPELLS = {
     desc: 'Restore 1 Mind Point to a hero within 5 squares.',
     icon: '✨',
     healMind: 1,
+    range: 5,
   },
   pass_through_rock: {
     id: 'pass_through_rock',

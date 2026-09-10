@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import GameBoard from './components/GameBoard.jsx';
 import HeroPanel from './components/HeroPanel.jsx';
 import CombatLog from './components/CombatLog.jsx';
@@ -148,7 +148,8 @@ export default function App() {
   const [planningFor, setPlanningFor] = useState(null);
   const [intents, setIntents] = useState({});
   const [targetingSpell, setTargetingSpell] = useState(null);
-  const [targetingItem, setTargetingItem] = useState(null);    // 'holy_water' | null
+  const [targetingItem, setTargetingItem] = useState(null);    // 'holy_water' | 'throw' | null
+  const [throwingWeapon, setThrowingWeapon] = useState(null);
   const [geniePendingHeroId, setGeniePendingHeroId] = useState(null);
   const [wandPickerHeroId, setWandPickerHeroId] = useState(null);
   const boardRef = useRef(null);
@@ -247,6 +248,15 @@ export default function App() {
       : []);
   };
 
+  // Populate attackable at the start of each hero turn so heroes can attack before rolling movement.
+  useEffect(() => {
+    if (!game || game.phase !== PHASE.HERO_TURN || !revealedTiles) return;
+    const hero = game.heroes[game.activeHeroIndex];
+    if (!hero || hero.isDead) return;
+    computeAttackable(hero, game.monsters.filter(m => !m.isDead), revealedTiles);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.activeHeroIndex, game?.phase]);
+
   // All wall tile positions as a Set of "x,y" strings (used by Pass Through Rock).
   const getAllWallTiles = (quest) => {
     const walls = new Set();
@@ -320,6 +330,7 @@ export default function App() {
     }
     if (targetingSpell) { handleSpellTarget(tile); return; }
     if (targetingItem === 'holy_water') { handleHolyWaterTarget(tile); return; }
+    if (targetingItem === 'throw') { handleThrowTarget(tile); return; }
 
     setGame(g => {
       if (!g || g.phase !== PHASE.HERO_TURN) return g;
@@ -426,7 +437,7 @@ export default function App() {
       return g;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reachable, attackable, rangedAttackable, planningFor, targetingSpell, targetingItem, game, intents, questIndex]);
+  }, [reachable, attackable, rangedAttackable, planningFor, targetingSpell, targetingItem, throwingWeapon, game, intents, questIndex]);
 
   // ─── Spells ───────────────────────────────────────────────────────────
 
@@ -502,6 +513,12 @@ export default function App() {
       } else if (spell.targeting === 'ally') {
         const target = g.heroes.find(h => h.x === tile.x && h.y === tile.y && !h.isDead);
         if (!target) return g;
+        if (spell.range) {
+          const dist = Math.abs(target.x - hero.x) + Math.abs(target.y - hero.y);
+          if (dist > spell.range) {
+            return { ...g, log: [...g.log, { text: `${target.name} is out of range (max ${spell.range} squares).`, color: '#e67e22', time: Date.now() }] };
+          }
+        }
         if (spell.healMind) {
           updatedHeroes = g.heroes.map(h => h.id === target.id ? { ...h, mind: Math.min(h.maxMind, h.mind + spell.healMind) } : h);
           logEntry.text = `${hero.name} casts ${spell.name} on ${target.name}. +${spell.healMind} Mind.`;
@@ -593,6 +610,45 @@ export default function App() {
     });
   };
 
+  // ─── Throw weapon ─────────────────────────────────────────────────────
+
+  const handleThrowTarget = (tile) => {
+    const weapon = throwingWeapon;
+    setThrowingWeapon(null);
+    setTargetingItem(null);
+    setRangedAttackable([]);
+    setGame(g => {
+      if (!g || g.hasActed) return g;
+      const hero = g.heroes[g.activeHeroIndex];
+      const target = g.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead && revealedTiles?.has(`${m.x},${m.y}`));
+      if (!target) return g;
+      const attackDice = hero.attackDice + (weapon.attackBonus || 0);
+      const attackRolls = rollDice(attackDice);
+      const defendRolls = rollDice(target.defendDice);
+      const { damage } = resolveCombat(attackRolls, defendRolls);
+      setDiceResult({ attackRolls, defendRolls, damage });
+      const newBody = Math.max(0, target.body - damage);
+      const isDead = newBody <= 0;
+      const bossKilled = isDead && target.id === currentQuest.victory?.bossId;
+      const newEquip = (hero.equipment || []).filter(e => e.id !== weapon.id);
+      return {
+        ...g,
+        monsters: g.monsters.map(m => m.id === target.id ? { ...m, body: newBody, isDead } : m),
+        heroes: g.heroes.map(h => h.id === hero.id ? {
+          ...h, equipment: newEquip, gold: isDead ? h.gold + (target.gold || 0) : h.gold,
+        } : h),
+        hasActed: true,
+        bossKilled: g.bossKilled || bossKilled,
+        log: [...g.log, {
+          text: `${hero.name} throws ${weapon.name} at ${target.name} — ${damage} damage${isDead ? ` (killed! +${target.gold || 0}gp)` : ''}. Weapon lost.`,
+          color: isDead ? '#e74c3c' : '#eee',
+          rolls: [...attackRolls, '|', ...defendRolls],
+          time: Date.now(),
+        }],
+      };
+    });
+  };
+
   // ─── Genie item selection ──────────────────────────────────────────────
 
   const handleGenieSelect = (item) => {
@@ -666,6 +722,32 @@ export default function App() {
     if (action === 'end_turn') { endTurn(); return; }
     if (action === 'use_potion') { usePotion(); return; }
     if (action === 'use_holy_water') { setTargetingItem('holy_water'); return; }
+    if (action === 'rest') {
+      setGame(g => {
+        if (!g || g.hasActed) return g;
+        const hero = g.heroes[g.activeHeroIndex];
+        if (hero.body >= hero.maxBody) return { ...g, log: [...g.log, { text: `${hero.name} is already at full health.`, color: '#555', time: Date.now() }] };
+        return {
+          ...g,
+          heroes: g.heroes.map(h => h.id === hero.id ? { ...h, body: Math.min(h.maxBody, h.body + 1) } : h),
+          hasActed: true,
+          log: [...g.log, { text: `${hero.name} rests and recovers 1 Body Point.`, color: '#2ecc71', time: Date.now() }],
+        };
+      });
+      return;
+    }
+    if (action.startsWith('throw:')) {
+      if (game?.hasActed) return;
+      const hero = game?.heroes[game.activeHeroIndex];
+      const weaponId = action.slice(6);
+      const weapon = hero?.equipment?.find(e => e.id === weaponId);
+      if (!weapon) return;
+      setThrowingWeapon(weapon);
+      setTargetingItem('throw');
+      const liveVisible = (game?.monsters || []).filter(m => !m.isDead && revealedTiles?.has(`${m.x},${m.y}`));
+      setRangedAttackable(liveVisible);
+      return;
+    }
     if (action === 'use_wand') {
       const hero = game?.heroes[game.activeHeroIndex];
       if (hero) setWandPickerHeroId(hero.id);
@@ -754,10 +836,11 @@ export default function App() {
         } else if (card.type === 'monster') {
           const wanderType = currentQuest.wanderingMonsterType;
           const allPiecePositions = [...g.heroes.filter(h => !h.isDead), ...g.monsters.filter(m => !m.isDead)];
-          const candidates = [
-            { x: hero.x + 1, y: hero.y }, { x: hero.x - 1, y: hero.y },
-            { x: hero.x, y: hero.y + 1 }, { x: hero.x, y: hero.y - 1 },
-          ].filter(t => {
+          // Spawn near the hero entry corridor (heroSpawns), not next to the searching hero.
+          const spawnOffsets = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
+          const candidates = (currentQuest.heroSpawns || []).flatMap(s =>
+            spawnOffsets.map(o => ({ x: s.x + o.dx, y: s.y + o.dy }))
+          ).filter(t => {
             const tileType = currentQuest.tiles[t.y]?.[t.x];
             if (!tileType || tileType === 'void' || tileType === 'wall') return false;
             return !allPiecePositions.some(p => p.x === t.x && p.y === t.y);
@@ -874,7 +957,7 @@ export default function App() {
   // ─── End turn / monster AI ─────────────────────────────────────────────
 
   const endTurn = () => {
-    setReachable([]); setAttackable([]); setRangedAttackable([]); setTargetingSpell(null); setTargetingItem(null);
+    setReachable([]); setAttackable([]); setRangedAttackable([]); setTargetingSpell(null); setTargetingItem(null); setThrowingWeapon(null);
     setGame(g => {
       if (!g) return g;
       const stunned = g.buffedHeroes?.has('tempest');
@@ -939,6 +1022,8 @@ export default function App() {
   if (!game) return null;
   const isQuestOver = game.phase === PHASE.QUEST_COMPLETE || game.phase === PHASE.GAME_OVER;
   const hasPotion = activeHero?.equipment?.some(e => e.usable && (e.healBody || e.healMind || e.buffKey || e.isWand));
+  const canRest = !game.hasActed && activeHero?.body < activeHero?.maxBody;
+  const throwableWeapons = !game.hasActed ? (activeHero?.equipment?.filter(e => e.throwable) || []) : [];
   const canDisarmTrap = !game.hasActed &&
     (activeHero?.heroId === 'dwarf' || activeHero?.equipment?.some(e => e.isToolKit)) &&
     game.traps?.some(t => t.revealed && !t.triggered &&
@@ -987,6 +1072,12 @@ export default function App() {
             <div style={{ background: '#0a1a0a', border: '1px solid #2ecc71', borderRadius: 8, padding: '10px 20px', color: '#aaffaa', fontSize: 14 }}>
               Holy Water — click an undead monster (skeleton, zombie, mummy)
               <button onClick={() => setTargetingItem(null)} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            </div>
+          )}
+          {targetingItem === 'throw' && throwingWeapon && (
+            <div style={{ background: '#1a1000', border: '1px solid #ff8800', borderRadius: 8, padding: '10px 20px', color: '#ffcc88', fontSize: 14 }}>
+              Throwing {throwingWeapon.name} — click any visible monster (weapon lost after throw)
+              <button onClick={() => { setTargetingItem(null); setThrowingWeapon(null); setRangedAttackable([]); }} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
             </div>
           )}
         </div>
@@ -1040,6 +1131,8 @@ export default function App() {
             movesLeft={game.movesLeft}
             onAction={handleAction}
             hasPotion={i === game.activeHeroIndex && hasPotion}
+            canRest={i === game.activeHeroIndex && canRest}
+            throwableWeapons={i === game.activeHeroIndex ? throwableWeapons : []}
             canDisarmTrap={i === game.activeHeroIndex && canDisarmTrap}
             isPlanningFor={planningFor === hero.id}
             onTogglePlan={!hero.isDead ? () => togglePlan(hero.id) : undefined}

@@ -79,9 +79,12 @@ export function rollMovement(diceCount = 2) {
     .reduce((a, b) => a + b, 0);
 }
 
-export function resolveCombat(attackRolls, defendRolls) {
+// defenderIsHero: heroes block with white shields; monsters block with black shields.
+export function resolveCombat(attackRolls, defendRolls, defenderIsHero = false) {
   const skulls = attackRolls.filter(r => r === 'skull').length;
-  const shields = defendRolls.filter(r => r === 'black_shield').length;
+  const shields = defenderIsHero
+    ? defendRolls.filter(r => r === 'white_shield').length
+    : defendRolls.filter(r => r === 'black_shield').length;
   const damage = Math.max(0, skulls - shields);
   return { skulls, shields, damage };
 }
@@ -330,7 +333,7 @@ export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHero
       const attackRolls = rollDice(monster.attackDice);
       const bonusDefend = (buffedHeroes.has(target.id + ':rock_skin') ? 2 : 0) + (buffedHeroes.has(target.id + ':frost_skin') ? 2 : 0);
       const defendRolls = rollDice(getEffectiveDefend(target) + bonusDefend);
-      const { damage } = resolveCombat(attackRolls, defendRolls);
+      const { damage } = resolveCombat(attackRolls, defendRolls, true); // heroes block with white shields
       const newBody = Math.max(0, target.body - damage);
       const isDead = newBody <= 0;
 

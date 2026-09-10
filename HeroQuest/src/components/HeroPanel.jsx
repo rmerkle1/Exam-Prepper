@@ -22,6 +22,8 @@ export default function HeroPanel({
   movesLeft,
   onAction,
   hasPotion,
+  canRest,
+  throwableWeapons,
   isPlanningFor,
   onTogglePlan,
   usedSpells,
@@ -112,6 +114,12 @@ export default function HeroPanel({
             {canDisarmTrap && (
               <ActionBtn onClick={() => onAction('disarm_trap')} label="Disarm Trap" icon="🔧" />
             )}
+            {canRest && (
+              <ActionBtn onClick={() => onAction('rest')} label="Rest (+1 Body)" icon="💤" />
+            )}
+            {throwableWeapons?.map(w => (
+              <ActionBtn key={w.id} onClick={() => onAction(`throw:${w.id}`)} label={`Throw ${w.name}`} icon="🎯" />
+            ))}
             {hasPotion && (
               <ActionBtn onClick={() => onAction('use_potion')} label="Drink Potion" icon="🧪" />
             )}
