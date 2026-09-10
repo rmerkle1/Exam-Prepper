@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ARMORY_ITEMS, buyItem, getEffectiveAttack, getEffectiveDefend } from '../data/armory.js';
+import { buyItem, getEffectiveAttack, getEffectiveDefend } from '../data/armory.js';
 
-const CATEGORIES = ['weapon', 'armour', 'potion'];
-const CAT_LABEL = { weapon: 'Weapons', armour: 'Armour', potion: 'Potions' };
+const CATEGORIES = ['weapon', 'armour', 'potion', 'tool', 'usable'];
+const CAT_LABEL = { weapon: 'Weapons', armour: 'Armour', potion: 'Potions', tool: 'Tools', usable: 'Items' };
 
-function HeroCard({ hero, onBuy }) {
+function HeroCard({ hero, onBuy, armoryItems }) {
   const colorHex = '#' + hero.color.toString(16).padStart(6, '0');
   const ownedIds = new Set((hero.equipment || []).map(e => e.id));
 
@@ -42,7 +42,7 @@ function HeroCard({ hero, onBuy }) {
 
       {/* Buy buttons per category */}
       {CATEGORIES.map(cat => {
-        const items = ARMORY_ITEMS.filter(i => i.category === cat);
+        const items = armoryItems.filter(i => i.category === cat);
         return (
           <div key={cat} style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: '#444', letterSpacing: 1, marginBottom: 4 }}>{CAT_LABEL[cat].toUpperCase()}</div>
@@ -58,7 +58,9 @@ function HeroCard({ hero, onBuy }) {
                   ownedIds.has(better.id)
                 );
               })();
-              const unavailable = owned || restricted || replacedByOwned;
+              const incompatible = item.incompatibleWith?.some(id => ownedIds.has(id)) ||
+                (hero.equipment || []).some(e => e.incompatibleWith?.includes(item.id));
+              const unavailable = owned || restricted || replacedByOwned || incompatible;
 
               return (
                 <div key={item.id} style={{
@@ -82,7 +84,7 @@ function HeroCard({ hero, onBuy }) {
                       minWidth: 60, textAlign: 'right',
                     }}
                   >
-                    {owned ? 'Owned' : restricted ? 'Restricted' : replacedByOwned ? 'Outclassed' : `${item.cost} gp`}
+                    {owned ? 'Owned' : restricted ? 'Restricted' : incompatible ? 'Incompatible' : replacedByOwned ? 'Outclassed' : `${item.cost} gp`}
                   </button>
                 </div>
               );
@@ -94,7 +96,7 @@ function HeroCard({ hero, onBuy }) {
   );
 }
 
-export default function Armory({ heroes, questName, nextQuestName, onContinue }) {
+export default function Armory({ heroes, questName, nextQuestName, onContinue, armoryItems }) {
   const [localHeroes, setLocalHeroes] = useState(
     heroes.map(h => ({ ...h, body: h.maxBody, mind: h.maxMind })) // full heal between quests
   );
@@ -132,7 +134,7 @@ export default function Armory({ heroes, questName, nextQuestName, onContinue })
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 40 }}>
         {localHeroes.filter(h => !h.isDead).map(hero => (
           <div key={hero.id} style={{ position: 'relative' }}>
-            <HeroCard hero={hero} onBuy={(item) => handleBuy(hero.id, item)} />
+            <HeroCard hero={hero} onBuy={(item) => handleBuy(hero.id, item)} armoryItems={armoryItems} />
             {errors[hero.id] && (
               <div style={{
                 position: 'absolute', bottom: -24, left: 0, right: 0,

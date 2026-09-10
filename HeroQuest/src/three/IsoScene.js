@@ -17,6 +17,7 @@ const COLORS = {
   stair: 0xa0c0a0,
   reachable: 0x44aaff,
   attackable: 0xff4444,
+  ranged: 0xff8800,
   fog: 0x0a0a18,
 };
 
@@ -479,8 +480,7 @@ export class IsoScene {
   // ─── Highlights ──────────────────────────────────────────────────────
 
   setHighlights(tiles, mode = 'reachable') {
-    this.clearHighlights();
-    const color = mode === 'reachable' ? COLORS.reachable : COLORS.attackable;
+    const color = mode === 'reachable' ? COLORS.reachable : mode === 'ranged' ? COLORS.ranged : COLORS.attackable;
 
     tiles.forEach(({ x, y }) => {
       const { wx, wz } = this._tileToWorld(x, y);

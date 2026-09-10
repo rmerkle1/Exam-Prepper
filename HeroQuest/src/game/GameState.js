@@ -107,9 +107,43 @@ export function isTileWalkable(quest, x, y, pieces) {
   return !pieces.some(p => !p.isDead && p.x === x && p.y === y);
 }
 
-export function getAdjacentPieces(x, y, pieces) {
-  const adj = getAdjacentTiles(x, y);
+export function getAdjacentPieces(x, y, pieces, diagonal = false) {
+  const adj = diagonal
+    ? [
+        { x: x-1, y }, { x: x+1, y }, { x, y: y-1 }, { x, y: y+1 },
+        { x: x-1, y: y-1 }, { x: x+1, y: y-1 }, { x: x-1, y: y+1 }, { x: x+1, y: y+1 },
+      ]
+    : getAdjacentTiles(x, y);
   return pieces.filter(p => !p.isDead && adj.some(a => a.x === p.x && a.y === p.y));
+}
+
+function hasLineOfSight(quest, x1, y1, x2, y2) {
+  if (x1 === x2) {
+    const minY = Math.min(y1, y2) + 1;
+    const maxY = Math.max(y1, y2);
+    for (let y = minY; y < maxY; y++) {
+      if (!isPassable(quest.tiles[y]?.[x1])) return false;
+    }
+    return true;
+  } else if (y1 === y2) {
+    const minX = Math.min(x1, x2) + 1;
+    const maxX = Math.max(x1, x2);
+    for (let x = minX; x < maxX; x++) {
+      if (!isPassable(quest.tiles[y1]?.[x])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function getRangedTargets(quest, heroX, heroY, monsters, revealedTiles, crossbowMode = false) {
+  return monsters.filter(m => {
+    if (m.isDead) return false;
+    if (!revealedTiles?.has(`${m.x},${m.y}`)) return false;
+    if (m.x !== heroX && m.y !== heroY) return false;
+    if (crossbowMode && Math.abs(m.x - heroX) + Math.abs(m.y - heroY) <= 1) return false;
+    return hasLineOfSight(quest, heroX, heroY, m.x, m.y);
+  });
 }
 
 // traversalBlockers: pieces that physically block passage (monsters for heroes, all pieces for monsters).
@@ -141,7 +175,11 @@ export function getReachableTiles(quest, startX, startY, moves, traversalBlocker
   visited.delete(`${startX},${startY}`);
   const landingSet = new Set(landingBlockers.filter(p => !p.isDead).map(p => `${p.x},${p.y}`));
   return [...visited.keys()]
-    .filter(k => !landingSet.has(k))
+    .filter(k => {
+      if (landingSet.has(k)) return false;
+      const [x, y] = k.split(',').map(Number);
+      return isPassable(quest.tiles[y]?.[x]); // cannot land on walls even if traversable via pass_through_rock
+    })
     .map(k => {
       const [x, y] = k.split(',').map(Number);
       return { x, y, movesLeft: visited.get(k) };
@@ -290,7 +328,8 @@ export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHero
       if (attackableHeroes.length === 0) continue;
       const target = attackableHeroes.reduce((a, b) => a.body < b.body ? a : b);
       const attackRolls = rollDice(monster.attackDice);
-      const defendRolls = rollDice(getEffectiveDefend(target));
+      const bonusDefend = (buffedHeroes.has(target.id + ':rock_skin') ? 2 : 0) + (buffedHeroes.has(target.id + ':frost_skin') ? 2 : 0);
+      const defendRolls = rollDice(getEffectiveDefend(target) + bonusDefend);
       const { damage } = resolveCombat(attackRolls, defendRolls);
       const newBody = Math.max(0, target.body - damage);
       const isDead = newBody <= 0;

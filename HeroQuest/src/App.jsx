@@ -8,7 +8,7 @@ import Armory from './components/Armory.jsx';
 import { QUESTS } from './data/quests.js';
 import { HEROES } from './data/heroes.js';
 import { SPELLS } from './data/spells.js';
-import { ARMORY_ITEMS } from './data/armory.js';
+import { ORIGINAL_ARMORY_ITEMS, EXPANDED_ARMORY_ITEMS, getEffectiveRangedAttack } from './data/armory.js';
 import { buildShuffledDeck } from './data/treasureDeck.js';
 import {
   createHeroPiece,
@@ -18,6 +18,7 @@ import {
   resolveCombat,
   getReachableTiles,
   getAdjacentPieces,
+  getRangedTargets,
   revealFromTile,
   getInitialRevealedTiles,
   doMonsterTurn,
@@ -34,6 +35,7 @@ const HERO_ORDER = ['barbarian', 'dwarf', 'elf', 'wizard'];
 
 function Lobby({ onStart }) {
   const [selected, setSelected] = useState(['barbarian']);
+  const [armoryMode, setArmoryMode] = useState('original');
   const toggle = (id) =>
     setSelected(prev =>
       prev.includes(id)
@@ -50,7 +52,7 @@ function Lobby({ onStart }) {
       <h1 style={{ color: '#c0963c', fontSize: 48, marginBottom: 8, letterSpacing: 4 }}>HEROIC QUEST</h1>
       <p style={{ color: '#666', marginBottom: 32 }}>A cooperative dungeon adventure</p>
       <p style={{ color: '#aaa', marginBottom: 16 }}>Choose your heroes (1–4):</p>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 40, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
         {HERO_ORDER.map(id => {
           const h = HEROES[id];
           const active = selected.includes(id);
@@ -73,7 +75,22 @@ function Lobby({ onStart }) {
           );
         })}
       </div>
-      <button onClick={() => onStart(selected)} style={{
+      <div style={{ marginBottom: 32 }}>
+        <p style={{ color: '#aaa', marginBottom: 10, textAlign: 'center' }}>Armory ruleset:</p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          {[['original', 'Original Armory'], ['expanded', 'Expanded Armory']].map(([mode, label]) => (
+            <button key={mode} onClick={() => setArmoryMode(mode)} style={{
+              background: armoryMode === mode ? '#1c1c2e' : '#0d0d1a',
+              border: `2px solid ${armoryMode === mode ? '#c0963c' : '#333'}`,
+              borderRadius: 8, padding: '10px 20px', cursor: 'pointer',
+              color: armoryMode === mode ? '#c0963c' : '#888', fontSize: 13,
+              boxShadow: armoryMode === mode ? '0 0 10px #c0963c44' : 'none',
+              transition: 'all 0.2s',
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <button onClick={() => onStart(selected, armoryMode)} style={{
         background: '#c0963c', color: '#1a1a1a', border: 'none',
         borderRadius: 8, padding: '14px 40px', fontSize: 18,
         fontWeight: 'bold', cursor: 'pointer', letterSpacing: 2,
@@ -120,10 +137,12 @@ export default function App() {
   const [screen, setScreen] = useState('lobby');          // 'lobby'|'game'|'armory'|'campaign_complete'
   const [questIndex, setQuestIndex] = useState(0);
   const [campaignHeroes, setCampaignHeroes] = useState(null); // persists across quests
+  const [campaignArmoryMode, setCampaignArmoryMode] = useState('original'); // 'original'|'expanded'
   const [game, setGame] = useState(null);
   const [revealedTiles, setRevealedTiles] = useState(null);
   const [reachable, setReachable] = useState([]);
   const [attackable, setAttackable] = useState([]);
+  const [rangedAttackable, setRangedAttackable] = useState([]);
   const [diceResult, setDiceResult] = useState(null);
   const [treasureCard, setTreasureCard] = useState(null);
   const [planningFor, setPlanningFor] = useState(null);
@@ -139,11 +158,12 @@ export default function App() {
 
   // ─── Campaign start ──────────────────────────────────────────────────
 
-  const startCampaign = (heroIds) => {
+  const startCampaign = (heroIds, armoryMode) => {
     const heroes = heroIds.map((id, i) =>
       createHeroPiece(id, `p${i}`, QUESTS[0].heroSpawns[i].x, QUESTS[0].heroSpawns[i].y)
     );
     setCampaignHeroes(heroes);
+    setCampaignArmoryMode(armoryMode || 'original');
     setQuestIndex(0);
     launchQuest(QUESTS[0], heroes);
   };
@@ -152,7 +172,7 @@ export default function App() {
     const g = initQuestGame(quest, heroes);
     setGame(g);
     setRevealedTiles(getInitialRevealedTiles(quest, quest.heroSpawns));
-    setReachable([]); setAttackable([]);
+    setReachable([]); setAttackable([]); setRangedAttackable([]);
     setDiceResult(null); setTreasureCard(null);
     setPlanningFor(null); setIntents({});
     setTargetingSpell(null);
@@ -210,6 +230,22 @@ export default function App() {
 
   // Furniture positions for the current quest (treated as permanent traversal blockers).
   const furnitureBlockers = (currentQuest?.furniture || []).map(f => ({ x: f.x, y: f.y, isDead: false }));
+
+  const activeArmoryItems = campaignArmoryMode === 'expanded' ? EXPANDED_ARMORY_ITEMS : ORIGINAL_ARMORY_ITEMS;
+
+  // Returns the hero's equipped melee weapon (if any).
+  const getHeroDiagonal = (hero) => (hero.equipment || []).some(e => e.diagonal && e.slot === 'weapon');
+  const getHeroRangedWeapon = (hero) => (hero.equipment || []).find(e => e.ranged && e.slot === 'ranged');
+
+  // Compute melee + ranged attackable after movement/roll. Updates both state vars.
+  const computeAttackable = (hero, liveMonsters, revTiles) => {
+    const diagonal = getHeroDiagonal(hero);
+    setAttackable(getAdjacentPieces(hero.x, hero.y, liveMonsters, diagonal));
+    const rangedWeapon = getHeroRangedWeapon(hero);
+    setRangedAttackable(rangedWeapon
+      ? getRangedTargets(currentQuest, hero.x, hero.y, liveMonsters, revTiles, rangedWeapon.crossbow)
+      : []);
+  };
 
   // All wall tile positions as a Set of "x,y" strings (used by Pass Through Rock).
   const getAllWallTiles = (quest) => {
@@ -348,14 +384,20 @@ export default function App() {
           : updated.revealedSecretDoors;
         const newReachable = newMovesLeft > 0 ? getReachableTiles(currentQuest, tile.x, tile.y, newMovesLeft, postMoveMonsters, postMoveAllOthers, postMoveExtra) : [];
         setReachable(newReachable);
-        setAttackable(getAdjacentPieces(tile.x, tile.y, updated.monsters.filter(m => !m.isDead)));
+        const postMoveLiveMonsters = updated.monsters.filter(m => !m.isDead);
+        computeAttackable(newHero, postMoveLiveMonsters, revealedTiles);
         return updated;
       }
 
-      // Attack monster
-      const target = attackable.find(m => m.x === tile.x && m.y === tile.y);
+      // Attack monster — melee or ranged
+      const meleeTarget = attackable.find(m => m.x === tile.x && m.y === tile.y);
+      const rangedTarget = !meleeTarget ? rangedAttackable.find(m => m.x === tile.x && m.y === tile.y) : null;
+      const target = meleeTarget || rangedTarget;
       if (target && !g.hasActed) {
-        const attackRolls = rollDice(getEffectiveAttack(hero));
+        const fireRageBonus = g.buffedHeroes?.has(hero.id + ':fire_rage') ? 2 : 0;
+        const isRangedAttack = !!rangedTarget;
+        const baseDice = isRangedAttack ? getEffectiveRangedAttack(hero) : getEffectiveAttack(hero);
+        const attackRolls = rollDice(baseDice + fireRageBonus);
         const defendRolls = rollDice(target.defendDice);
         const { damage } = resolveCombat(attackRolls, defendRolls);
         setDiceResult({ attackRolls, defendRolls, damage });
@@ -384,7 +426,7 @@ export default function App() {
       return g;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reachable, attackable, planningFor, targetingSpell, targetingItem, game, intents, questIndex]);
+  }, [reachable, attackable, rangedAttackable, planningFor, targetingSpell, targetingItem, game, intents, questIndex]);
 
   // ─── Spells ───────────────────────────────────────────────────────────
 
@@ -444,7 +486,7 @@ export default function App() {
           } else if (spell.attackDice) {
             attackRolls = rollDice(spell.attackDice);
             const skulls = attackRolls.filter(r => r === 'skull').length;
-            damage = spell.noDefend ? skulls : Math.max(0, skulls - rollDice(target.defendDice).filter(r => r !== 'skull').length);
+            damage = spell.noDefend ? skulls : Math.max(0, skulls - rollDice(target.defendDice).filter(r => r === 'black_shield').length);
             setDiceResult({ attackRolls, defendRolls: [], damage });
             logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
           }
@@ -598,7 +640,11 @@ export default function App() {
     setGame(g => {
       if (!g || g.hasRolledMove) return g;
       const hero = g.heroes[g.activeHeroIndex];
-      const moves = rollMovement(hero.movement);
+      const movementDiceCount = (hero.equipment || []).reduce((min, e) => e.movementDice ? Math.min(min, e.movementDice) : min, 2);
+      const movementPenalty = (hero.equipment || []).reduce((sum, e) => sum + (e.movementPenalty || 0), 0);
+      const movementBonus = (hero.equipment || []).reduce((sum, e) => sum + (e.movementBonus || 0), 0)
+        + (g.buffedHeroes?.has(hero.id + ':dexterity') ? 6 : 0);
+      const moves = Math.max(1, rollMovement(movementDiceCount) - movementPenalty + movementBonus);
       const monsterBlockers = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
       const allOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...monsterBlockers];
       const hasPassThrough = g.buffedHeroes?.has(hero.id + ':pass_through_rock');
@@ -606,10 +652,10 @@ export default function App() {
         ? new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)])
         : g.revealedSecretDoors;
       setReachable(getReachableTiles(currentQuest, hero.x, hero.y, moves, monsterBlockers, allOthers, extraPassable));
-      setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
+      computeAttackable(hero, g.monsters.filter(m => !m.isDead), revealedTiles);
       return {
         ...g, movesLeft: moves, hasRolledMove: true,
-        log: [...g.log, { text: `${hero.name} rolls ${moves} movement.`, color: '#44aaff', time: Date.now() }],
+        log: [...g.log, { text: `${hero.name} rolls ${moves} movement${movementBonus > 0 ? ` (+${movementBonus})` : ''}.`, color: '#44aaff', time: Date.now() }],
       };
     });
   };
@@ -635,6 +681,27 @@ export default function App() {
         const adjTrap = g.traps.find(t => t.revealed && !t.triggered &&
           Math.abs(t.x - hero.x) + Math.abs(t.y - hero.y) <= 1);
         if (!adjTrap) return g;
+        // Dwarf disarms automatically; Tool Kit has 50% chance (roll 1 die, skull = fail)
+        const hasToolKit = hero.equipment?.some(e => e.isToolKit);
+        if (hasToolKit && hero.heroId !== 'dwarf') {
+          const roll = rollDice(1);
+          const success = roll[0] !== 'skull';
+          if (success) {
+            boardRef.current?.removeTrapMarker(adjTrap.id);
+            return {
+              ...g,
+              traps: g.traps.map(t => t.id === adjTrap.id ? { ...t, triggered: true } : t),
+              hasActed: true,
+              log: [...g.log, { text: `${hero.name} uses Tool Kit — success! Trap disarmed.`, color: '#2ecc71', time: Date.now() }],
+            };
+          } else {
+            return {
+              ...g,
+              hasActed: true,
+              log: [...g.log, { text: `${hero.name} uses Tool Kit — failed! (rolled ${roll[0]})`, color: '#e67e22', time: Date.now() }],
+            };
+          }
+        }
         boardRef.current?.removeTrapMarker(adjTrap.id);
         return {
           ...g,
@@ -766,9 +833,34 @@ export default function App() {
     setGame(g => {
       if (!g) return g;
       const hero = g.heroes[g.activeHeroIndex];
-      const potion = hero.equipment?.find(e => e.usable && (e.healBody || e.healMind));
+      const potion = hero.equipment?.find(e => e.usable && (e.healBody || e.healMind || e.buffKey || e.isWand));
       if (!potion) return g;
-      const newEquip = (() => { const eq = [...(hero.equipment || [])]; const idx = eq.findIndex(e => e.id === potion.id); if (idx >= 0) eq.splice(idx, 1); return eq; })();
+      const removePotion = (equip) => { const eq = [...equip]; const idx = eq.findIndex(e => e.id === potion.id); if (idx >= 0) eq.splice(idx, 1); return eq; };
+
+      // Wand of Magic — open the wand picker instead
+      if (potion.isWand) {
+        setWandPickerHeroId(hero.id);
+        return { ...g, heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: removePotion(h.equipment || []) } : h) };
+      }
+
+      // Buff potion (dexterity, fire_rage, frost_skin)
+      if (potion.buffKey) {
+        const newBuffs = new Set(g.buffedHeroes || []);
+        newBuffs.add(`${hero.id}:${potion.buffKey}`);
+        let logText = `${hero.name} drinks ${potion.name}!`;
+        if (potion.buffKey === 'dexterity') logText += ' +6 movement this turn.';
+        else if (potion.buffKey === 'fire_rage') logText += ' +2 attack dice this turn.';
+        else if (potion.buffKey === 'frost_skin') logText += ' +2 defense dice this turn.';
+        return {
+          ...g,
+          heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: removePotion(h.equipment || []) } : h),
+          buffedHeroes: newBuffs,
+          log: [...g.log, { text: logText, color: '#2ecc71', time: Date.now() }],
+        };
+      }
+
+      // Healing potion (body, mind, or both)
+      const newEquip = removePotion(hero.equipment || []);
       const newBody = potion.healBody ? Math.min(hero.maxBody, hero.body + potion.healBody) : hero.body;
       const newMind = potion.healMind ? Math.min(hero.maxMind, hero.mind + potion.healMind) : hero.mind;
       return {
@@ -782,7 +874,7 @@ export default function App() {
   // ─── End turn / monster AI ─────────────────────────────────────────────
 
   const endTurn = () => {
-    setReachable([]); setAttackable([]); setTargetingSpell(null); setTargetingItem(null);
+    setReachable([]); setAttackable([]); setRangedAttackable([]); setTargetingSpell(null); setTargetingItem(null);
     setGame(g => {
       if (!g) return g;
       const stunned = g.buffedHeroes?.has('tempest');
@@ -796,7 +888,11 @@ export default function App() {
       const curIdx = aliveHeroes.findIndex(h => h.id === cur?.id);
       const next = aliveHeroes[(curIdx + 1) % Math.max(1, aliveHeroes.length)];
       const nextIdx = updatedHeroes.findIndex(h => h.id === next?.id);
-      const newBuffs = new Set([...(g.buffedHeroes || [])].filter(b => !b.endsWith(':rock_skin') && !b.endsWith(':veil_of_mist') && !b.endsWith(':pass_through_rock') && b !== 'tempest'));
+      const newBuffs = new Set([...(g.buffedHeroes || [])].filter(b =>
+        !b.endsWith(':rock_skin') && !b.endsWith(':veil_of_mist') && !b.endsWith(':pass_through_rock') &&
+        !b.endsWith(':fire_rage') && !b.endsWith(':frost_skin') && !b.endsWith(':dexterity') &&
+        b !== 'tempest'
+      ));
 
       return {
         ...g, heroes: updatedHeroes, monsters: updatedMonsters, buffedHeroes: newBuffs,
@@ -819,6 +915,7 @@ export default function App() {
         questName={currentQuest?.name}
         nextQuestName={nextQuest?.name}
         onContinue={handleArmoryComplete}
+        armoryItems={activeArmoryItems}
       />
     );
   }
@@ -841,8 +938,9 @@ export default function App() {
 
   if (!game) return null;
   const isQuestOver = game.phase === PHASE.QUEST_COMPLETE || game.phase === PHASE.GAME_OVER;
-  const hasPotion = activeHero?.equipment?.some(e => e.usable && (e.healBody || e.healMind));
-  const canDisarmTrap = activeHero?.heroId === 'dwarf' && !game.hasActed &&
+  const hasPotion = activeHero?.equipment?.some(e => e.usable && (e.healBody || e.healMind || e.buffKey || e.isWand));
+  const canDisarmTrap = !game.hasActed &&
+    (activeHero?.heroId === 'dwarf' || activeHero?.equipment?.some(e => e.isToolKit)) &&
     game.traps?.some(t => t.revealed && !t.triggered &&
       Math.abs(t.x - activeHero.x) + Math.abs(t.y - activeHero.y) <= 1);
 
@@ -858,6 +956,7 @@ export default function App() {
           revealedTiles={revealedTiles}
           reachableTiles={reachable}
           attackablePieces={attackable}
+          rangedAttackablePieces={rangedAttackable}
           onTileClick={handleTileClick}
         />
 
@@ -967,7 +1066,7 @@ export default function App() {
           <div style={{ background: '#1a1a2e', border: '2px solid #9b59b6', borderRadius: 12, padding: 24, maxWidth: 360, width: '90%', color: '#eee' }}>
             <div style={{ color: '#9b59b6', fontWeight: 'bold', fontSize: 16, marginBottom: 16 }}>Genie — Choose a Free Item</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
-              {ARMORY_ITEMS.map(item => (
+              {activeArmoryItems.map(item => (
                 <button key={item.id} onClick={() => handleGenieSelect(item)} style={{
                   background: '#0d0d1a', border: '1px solid #333', borderRadius: 6,
                   padding: '8px 12px', color: '#ccc', cursor: 'pointer', textAlign: 'left', fontSize: 12,

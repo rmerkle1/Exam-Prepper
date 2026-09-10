@@ -7,6 +7,7 @@ const GameBoard = forwardRef(function GameBoard({
   revealedTiles,
   reachableTiles,
   attackablePieces,
+  rangedAttackablePieces,
   onTileClick,
   onTileHover,
 }, ref) {
@@ -74,10 +75,9 @@ const GameBoard = forwardRef(function GameBoard({
     const scene = sceneRef.current;
     scene.clearHighlights();
     if (reachableTiles?.length) scene.setHighlights(reachableTiles, 'reachable');
-    if (attackablePieces?.length) {
-      scene.setHighlights(attackablePieces.map(p => ({ x: p.x, y: p.y })), 'attack');
-    }
-  }, [reachableTiles, attackablePieces]);
+    if (attackablePieces?.length) scene.setHighlights(attackablePieces.map(p => ({ x: p.x, y: p.y })), 'attack');
+    if (rangedAttackablePieces?.length) scene.setHighlights(rangedAttackablePieces.map(p => ({ x: p.x, y: p.y })), 'ranged');
+  }, [reachableTiles, attackablePieces, rangedAttackablePieces]);
 
   // Event handlers — update without re-mounting
   useEffect(() => {
