@@ -128,6 +128,7 @@ function initQuestGame(quest, campaignHeroes) {
     movesLeft: 0,
     hasRolledMove: false,
     hasActed: false,
+    hasSpellCast: false,
   };
 }
 
@@ -444,6 +445,7 @@ export default function App() {
 
   const handleCastSpell = (spell) => {
     if (targetingSpell?.id === spell.id) { setTargetingSpell(null); return; }
+    if (game?.hasActed || game?.hasSpellCast) return; // spells and attacks are mutually exclusive; one spell per turn
     if (spell.targeting === 'none' || spell.targeting === 'self') {
       applySpell(spell);
     } else {
@@ -527,7 +529,7 @@ export default function App() {
           logEntry.text = `${hero.name} casts ${spell.name} on ${target.name}. +${spell.healMind} Mind.`;
         }
       }
-      return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, usedSpells: newUsed, hasActed: true, bossKilled, log: [...g.log, logEntry] };
+      return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, usedSpells: newUsed, hasActed: true, hasSpellCast: true, bossKilled, log: [...g.log, logEntry] };
     });
   };
 
@@ -545,22 +547,22 @@ export default function App() {
         setReachable(getReachableTiles(currentQuest, hero.x, hero.y, 12, swiftMonsters, swiftAllOthers, g.revealedSecretDoors));
         setAttackable(getAdjacentPieces(hero.x, hero.y, g.monsters.filter(m => !m.isDead)));
         logEntry.text = `${hero.name} casts Swift Wind! Move up to 12 squares.`;
-        return { ...g, movesLeft: 12, hasRolledMove: true, usedSpells: newUsed, log: [...g.log, logEntry] };
+        return { ...g, movesLeft: 12, hasRolledMove: true, hasSpellCast: true, usedSpells: newUsed, log: [...g.log, logEntry] };
       }
       if (spell.id === 'rock_skin') {
         const b = new Set(g.buffedHeroes); b.add(hero.id + ':rock_skin');
         logEntry.text = `${hero.name} casts Rock Skin! +2 defense dice this turn.`;
-        return { ...g, usedSpells: newUsed, buffedHeroes: b, log: [...g.log, logEntry] };
+        return { ...g, usedSpells: newUsed, buffedHeroes: b, hasActed: true, hasSpellCast: true, log: [...g.log, logEntry] };
       }
       if (spell.id === 'veil_of_mist') {
         const b = new Set(g.buffedHeroes); b.add(hero.id + ':veil_of_mist');
         logEntry.text = `${hero.name} casts Veil of Mist! Monsters skip you this turn.`;
-        return { ...g, usedSpells: newUsed, buffedHeroes: b, log: [...g.log, logEntry] };
+        return { ...g, usedSpells: newUsed, buffedHeroes: b, hasActed: true, hasSpellCast: true, log: [...g.log, logEntry] };
       }
       if (spell.id === 'tempest') {
         const b = new Set(g.buffedHeroes); b.add('tempest');
         logEntry.text = `${hero.name} casts Tempest! All monsters stunned for one turn.`;
-        return { ...g, usedSpells: newUsed, buffedHeroes: b, hasActed: true, log: [...g.log, logEntry] };
+        return { ...g, usedSpells: newUsed, buffedHeroes: b, hasActed: true, hasSpellCast: true, log: [...g.log, logEntry] };
       }
       if (spell.id === 'pass_through_rock') {
         const b = new Set(g.buffedHeroes); b.add(hero.id + ':pass_through_rock');
@@ -572,15 +574,15 @@ export default function App() {
           const ptExtra = new Set([...g.revealedSecretDoors, ...getAllWallTiles(currentQuest)]);
           setReachable(getReachableTiles(currentQuest, hero.x, hero.y, g.movesLeft, ptMonsters, ptOthers, ptExtra));
         }
-        return { ...g, usedSpells: newUsed, buffedHeroes: b, log: [...g.log, logEntry] };
+        return { ...g, usedSpells: newUsed, buffedHeroes: b, hasSpellCast: true, log: [...g.log, logEntry] };
       }
       if (spell.id === 'genie') {
         logEntry.text = `${hero.name} casts Genie! Choose a free item from the Armory.`;
         setGeniePendingHeroId(hero.id);
-        return { ...g, usedSpells: newUsed, hasActed: true, log: [...g.log, logEntry] };
+        return { ...g, usedSpells: newUsed, hasActed: true, hasSpellCast: true, log: [...g.log, logEntry] };
       }
       logEntry.text = `${hero.name} casts ${spell.name}.`;
-      return { ...g, usedSpells: newUsed, hasActed: true, log: [...g.log, logEntry] };
+      return { ...g, usedSpells: newUsed, hasActed: true, hasSpellCast: true, log: [...g.log, logEntry] };
     });
   };
 
@@ -688,7 +690,6 @@ export default function App() {
         ...g,
         heroes: g.heroes.map(h => h.id === hero.id ? { ...h, equipment: newEquip } : h),
         usedSpells: newUsed,
-        hasActed: true,
         log: [...g.log, { text: `${hero.name} uses the Wand of Magic! ${SPELLS[spellKey]?.name} can be cast again.`, color: '#9b59b6', time: Date.now() }],
       };
     });
@@ -985,7 +986,7 @@ export default function App() {
       return {
         ...g, heroes: updatedHeroes, monsters: updatedMonsters, buffedHeroes: newBuffs,
         activeHeroIndex: nextIdx >= 0 ? nextIdx : 0,
-        hasRolledMove: false, hasActed: false, movesLeft: 0,
+        hasRolledMove: false, hasActed: false, hasSpellCast: false, movesLeft: 0,
         phase: allDown ? PHASE.GAME_OVER : PHASE.HERO_TURN,
         log: [...g.log, ...logs, { text: `--- ${next?.name || '?'}'s turn ---`, color: '#f39c12', time: Date.now() + 1 }],
       };
@@ -1142,6 +1143,7 @@ export default function App() {
             isPlanningFor={planningFor === hero.id}
             onTogglePlan={!hero.isDead ? () => togglePlan(hero.id) : undefined}
             usedSpells={i === game.activeHeroIndex ? game.usedSpells : null}
+            canCastSpell={i === game.activeHeroIndex && !game.hasActed && !game.hasSpellCast}
             onCastSpell={i === game.activeHeroIndex ? handleCastSpell : undefined}
             targetingSpell={i === game.activeHeroIndex ? targetingSpell : null}
             onCancelSpell={() => setTargetingSpell(null)}

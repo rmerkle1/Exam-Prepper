@@ -27,6 +27,7 @@ export default function HeroPanel({
   isPlanningFor,
   onTogglePlan,
   usedSpells,
+  canCastSpell,
   onCastSpell,
   targetingSpell,
   onCancelSpell,
@@ -137,6 +138,7 @@ export default function HeroPanel({
             <SpellPanel
               hero={hero}
               usedSpells={usedSpells}
+              canCast={canCastSpell}
               onCastSpell={onCastSpell}
               targetingSpell={targetingSpell}
               onCancelSpell={onCancelSpell}

@@ -1,6 +1,6 @@
 import { SPELLS } from '../data/spells.js';
 
-export default function SpellPanel({ hero, usedSpells, onCastSpell, targetingSpell, onCancelSpell }) {
+export default function SpellPanel({ hero, usedSpells, canCast, onCastSpell, targetingSpell, onCancelSpell }) {
   if (!hero || hero.spells.length === 0) return null;
 
   const available = hero.spells.filter(id => !usedSpells.has(`${hero.id}:${id}`));
@@ -29,21 +29,30 @@ export default function SpellPanel({ hero, usedSpells, onCastSpell, targetingSpe
         </div>
       )}
 
+      {!canCast && (
+        <div style={{ fontSize: 10, color: '#665', marginBottom: 4, fontStyle: 'italic' }}>
+          Spells unavailable — already acted this turn.
+        </div>
+      )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {available.map(id => {
           const spell = SPELLS[id];
           if (!spell) return null;
           const isActive = targetingSpell?.id === id;
+          const blocked = !canCast && !isActive;
           return (
             <button
               key={id}
               onClick={() => onCastSpell(spell)}
-              title={spell.desc}
+              title={blocked ? 'Cannot cast — already acted this turn.' : spell.desc}
+              disabled={blocked}
               style={{
                 background: isActive ? '#4a3080' : '#1a1030',
                 border: `1px solid ${isActive ? '#9b59b6' : '#3a2060'}`,
                 borderRadius: 5, padding: '4px 8px',
-                color: '#ddd', fontSize: 11, cursor: 'pointer',
+                color: blocked ? '#555' : '#ddd', fontSize: 11,
+                cursor: blocked ? 'default' : 'pointer',
+                opacity: blocked ? 0.4 : 1,
                 display: 'flex', alignItems: 'center', gap: 4,
               }}
             >
