@@ -1176,6 +1176,99 @@ export class IsoScene {
     this._makeFloor(x, y, 'door_h', wx, wz);
   }
 
+  // ─── Floating damage / heal numbers ──────────────────────────────────
+
+  showDamageNumber(x, y, amount, color = 0xe74c3c) {
+    if (!amount) return;
+    const { wx, wz } = this._tileToWorld(x, y);
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const colorStr = '#' + color.toString(16).padStart(6, '0');
+    ctx.font = 'bold 46px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = colorStr;
+    ctx.fillText(amount > 0 ? `-${amount}` : `+${Math.abs(amount)}`, 64, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.8, 0.4, 1);
+    sprite.position.set(wx, 1.6, wz);
+    sprite.renderOrder = 20;
+    this.scene.add(sprite);
+
+    const startY = 1.6, endY = 3.0, duration = 1100;
+    const t0 = performance.now();
+    const animate = () => {
+      const t = Math.min((performance.now() - t0) / duration, 1);
+      sprite.position.y = startY + (endY - startY) * t;
+      mat.opacity = 1 - t * t;
+      if (t < 1) requestAnimationFrame(animate);
+      else { this.scene.remove(sprite); mat.dispose(); texture.dispose(); }
+    };
+    requestAnimationFrame(animate);
+  }
+
+  // ─── Spell swirl effect ───────────────────────────────────────────────
+
+  showSpellEffect(x, y, color = 0x9b59b6) {
+    const { wx, wz } = this._tileToWorld(x, y);
+    const radius = TILE_SIZE * 0.42;
+    const count = 8;
+    const orbs = [];
+
+    for (let i = 0; i < count; i++) {
+      const geo = new THREE.SphereGeometry(0.065, 6, 6);
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true });
+      const mesh = new THREE.Mesh(geo, mat);
+      this.scene.add(mesh);
+      orbs.push({ mesh, mat, geo, baseAngle: (i / count) * Math.PI * 2 });
+    }
+
+    const ringGeo = new THREE.TorusGeometry(radius, 0.028, 6, 36);
+    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(wx, 0.75, wz);
+    this.scene.add(ring);
+
+    const duration = 950;
+    const t0 = performance.now();
+    const animate = () => {
+      const elapsed = performance.now() - t0;
+      const t = Math.min(elapsed / duration, 1);
+      const fade = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35;
+      const spin = elapsed * 0.0055;
+
+      orbs.forEach(({ mesh, mat: oMat, baseAngle }) => {
+        const angle = baseAngle + spin;
+        mesh.position.set(
+          wx + Math.cos(angle) * radius,
+          0.75 + Math.sin(angle * 2.5) * 0.14,
+          wz + Math.sin(angle) * radius,
+        );
+        oMat.opacity = fade * 0.92;
+      });
+
+      ring.rotation.z = spin;
+      ringMat.opacity = fade * 0.55;
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        orbs.forEach(({ mesh, mat: oMat, geo }) => {
+          this.scene.remove(mesh); geo.dispose(); oMat.dispose();
+        });
+        this.scene.remove(ring); ringGeo.dispose(); ringMat.dispose();
+      }
+    };
+    requestAnimationFrame(animate);
+  }
+
   destroy() {
     cancelAnimationFrame(this._rafId);
     this.renderer.dispose();

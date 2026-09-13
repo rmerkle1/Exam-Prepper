@@ -14,7 +14,6 @@ import {
   createHeroPiece,
   createMonsterPiece,
   rollDice,
-  rollMovement,
   resolveCombat,
   getReachableTiles,
   getAdjacentPieces,
@@ -174,9 +173,21 @@ export default function App() {
   const [wandPickerHeroId, setWandPickerHeroId] = useState(null);
   const [allyHighlight, setAllyHighlight] = useState([]);
   const boardRef = useRef(null);
+  const pendingAnimationsRef = useRef([]);
 
   const currentQuest = QUESTS[questIndex];
   const nextQuest = QUESTS[questIndex + 1];
+
+  // Flush board animations queued during monster turn
+  useEffect(() => {
+    const events = pendingAnimationsRef.current;
+    if (events.length === 0) return;
+    pendingAnimationsRef.current = [];
+    events.forEach(e => {
+      if (e.type === 'damage') boardRef.current?.showDamageNumber(e.x, e.y, e.amount, e.color);
+      if (e.type === 'spell') boardRef.current?.showSpellEffect(e.x, e.y, e.color);
+    });
+  }, [game]);
 
   // ─── Campaign start ──────────────────────────────────────────────────
 
@@ -475,6 +486,7 @@ export default function App() {
         const defendRolls = torchNoDefend ? [] : rollDice(target.defendDice);
         const { damage } = resolveCombat(attackRolls, defendRolls);
         setDiceResult({ attackRolls, defendRolls, damage });
+        if (damage > 0) boardRef.current?.showDamageNumber(target.x, target.y, damage);
 
         const newBody = Math.max(0, target.body - damage);
         const isDead = newBody <= 0;
@@ -543,6 +555,8 @@ export default function App() {
 
     setTargetingSpell(null);
     setAllyHighlight([]);
+    const spellColor = spell.targeting === 'ally' ? 0x2ecc71 : 0x9b59b6;
+    boardRef.current?.showSpellEffect(tile.x, tile.y, spellColor);
     setGame(g => {
       if (!g) return g;
       const hero = g.heroes[g.activeHeroIndex];
@@ -592,6 +606,7 @@ export default function App() {
             setDiceResult({ attackRolls, defendRolls: [], damage });
             logEntry.text = `${hero.name} casts ${spell.name}! ${target.name} takes ${damage} damage.`;
           }
+          if (damage > 0) boardRef.current?.showDamageNumber(target.x, target.y, damage, 0x9b59b6);
           const newBody = Math.max(0, target.body - damage);
           const isDead = newBody <= 0;
           if (isDead && target.id === currentQuest.victory?.bossId) bossKilled = true;
@@ -613,6 +628,7 @@ export default function App() {
         if (spell.healMind) {
           updatedHeroes = g.heroes.map(h => h.id === target.id ? { ...h, mind: Math.min(h.maxMind, h.mind + spell.healMind) } : h);
           logEntry.text = `${hero.name} casts ${spell.name} on ${target.name}. +${spell.healMind} Mind.`;
+          boardRef.current?.showDamageNumber(target.x, target.y, -spell.healMind, 0x2ecc71);
         }
       }
       return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, usedSpells: newUsed, hasActed: true, hasSpellCast: true, bossKilled, log: [...g.log, logEntry] };
@@ -620,6 +636,8 @@ export default function App() {
   };
 
   const applySpell = (spell) => {
+    const activeHeroForSpell = game?.heroes[game?.activeHeroIndex];
+    if (activeHeroForSpell) boardRef.current?.showSpellEffect(activeHeroForSpell.x, activeHeroForSpell.y);
     setGame(g => {
       if (!g) return g;
       const hero = g.heroes[g.activeHeroIndex];
@@ -719,6 +737,7 @@ export default function App() {
       const defendRolls = throwTorchNoDefend ? [] : rollDice(target.defendDice);
       const { damage } = resolveCombat(attackRolls, defendRolls);
       setDiceResult({ attackRolls, defendRolls, damage });
+      if (damage > 0) boardRef.current?.showDamageNumber(target.x, target.y, damage);
       const newBody = Math.max(0, target.body - damage);
       const isDead = newBody <= 0;
       const bossKilled = isDead && target.id === currentQuest.victory?.bossId;
@@ -791,7 +810,10 @@ export default function App() {
       const movementPenalty = (hero.equipment || []).reduce((sum, e) => sum + (e.movementPenalty || 0), 0);
       const movementBonus = (hero.equipment || []).reduce((sum, e) => sum + (e.movementBonus || 0), 0)
         + (g.buffedHeroes?.has(hero.id + ':dexterity') ? 6 : 0);
-      const moves = Math.max(1, rollMovement(movementDiceCount) - movementPenalty + movementBonus);
+      const rawDice = Array.from({ length: movementDiceCount }, () => Math.floor(Math.random() * 6) + 1);
+      const rawTotal = rawDice.reduce((a, b) => a + b, 0);
+      const moves = Math.max(1, rawTotal - movementPenalty + movementBonus);
+      setDiceResult({ movementDice: rawDice, movementTotal: moves });
       const monsterBlockers = [...g.monsters.filter(m => !m.isDead), ...furnitureBlockers];
       const allOthers = [...g.heroes.filter(h => h.id !== hero.id && !h.isDead), ...monsterBlockers];
       const hasPassThrough = g.buffedHeroes?.has(hero.id + ':pass_through_rock');
@@ -1063,9 +1085,12 @@ export default function App() {
     setGame(g => {
       if (!g) return g;
       const stunned = g.buffedHeroes?.has('tempest');
-      const { updatedMonsters, updatedHeroes, logs } = stunned
-        ? { updatedMonsters: g.monsters, updatedHeroes: g.heroes, logs: [{ text: 'Monsters stunned by Tempest!', color: '#9b59b6', time: Date.now() }] }
+      const { updatedMonsters, updatedHeroes, logs, damageEvents } = stunned
+        ? { updatedMonsters: g.monsters, updatedHeroes: g.heroes, logs: [{ text: 'Monsters stunned by Tempest!', color: '#9b59b6', time: Date.now() }], damageEvents: [] }
         : doMonsterTurn(currentQuest, g.monsters, g.heroes, revealedTiles || new Set(), g.buffedHeroes || new Set());
+      if (damageEvents?.length) {
+        pendingAnimationsRef.current = damageEvents.map(e => ({ type: 'damage', ...e, color: 0xe74c3c }));
+      }
 
       const aliveHeroes = updatedHeroes.filter(h => !h.isDead);
       const allDown = aliveHeroes.length === 0;

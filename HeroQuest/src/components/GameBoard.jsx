@@ -25,6 +25,8 @@ const GameBoard = forwardRef(function GameBoard({
     removeTrapMarker: (id) => sceneRef.current?.removeTrapMarker(id),
     revealSecretDoor: (x, y) => sceneRef.current?.revealSecretDoor(x, y),
     openChest: (x, y) => sceneRef.current?.openChest(x, y),
+    showDamageNumber: (x, y, amount, color) => sceneRef.current?.showDamageNumber(x, y, amount, color),
+    showSpellEffect: (x, y, color) => sceneRef.current?.showSpellEffect(x, y, color),
   }));
 
   // Init scene once

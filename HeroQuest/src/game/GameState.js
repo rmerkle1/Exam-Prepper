@@ -308,11 +308,12 @@ export function bfsPath(quest, startX, startY, targetX, targetY, blockingPieces,
 
 export { getEffectiveAttack, getEffectiveDefend };
 
-// Run a full monster turn. Returns { updatedMonsters, updatedHeroes, logs }.
+// Run a full monster turn. Returns { updatedMonsters, updatedHeroes, logs, damageEvents }.
 export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHeroes = new Set()) {
   let updatedMonsters = monsters.map(m => ({ ...m }));
   let updatedHeroes = heroes.map(h => ({ ...h }));
   const logs = [];
+  const damageEvents = [];
 
   for (let i = 0; i < updatedMonsters.length; i++) {
     const monster = updatedMonsters[i];
@@ -343,6 +344,8 @@ export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHero
         rolls: [...attackRolls, '|', ...defendRolls],
         time: Date.now() + i,
       });
+
+      if (damage > 0) damageEvents.push({ x: target.x, y: target.y, amount: damage });
 
       updatedHeroes = updatedHeroes.map(h =>
         h.id === target.id ? { ...h, body: newBody, isDead, gold: isDead ? 0 : h.gold } : h
@@ -385,5 +388,5 @@ export function doMonsterTurn(quest, monsters, heroes, revealedTiles, buffedHero
     }
   }
 
-  return { updatedMonsters, updatedHeroes, logs };
+  return { updatedMonsters, updatedHeroes, logs, damageEvents };
 }
