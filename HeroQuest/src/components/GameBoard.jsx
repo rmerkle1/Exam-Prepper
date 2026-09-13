@@ -8,6 +8,7 @@ const GameBoard = forwardRef(function GameBoard({
   reachableTiles,
   attackablePieces,
   rangedAttackablePieces,
+  allyHighlightPieces,
   onTileClick,
   onTileHover,
 }, ref) {
@@ -23,6 +24,7 @@ const GameBoard = forwardRef(function GameBoard({
     addTrapMarker: (id, x, y) => sceneRef.current?.addTrapMarker(id, x, y),
     removeTrapMarker: (id) => sceneRef.current?.removeTrapMarker(id),
     revealSecretDoor: (x, y) => sceneRef.current?.revealSecretDoor(x, y),
+    openChest: (x, y) => sceneRef.current?.openChest(x, y),
   }));
 
   // Init scene once
@@ -77,7 +79,8 @@ const GameBoard = forwardRef(function GameBoard({
     if (reachableTiles?.length) scene.setHighlights(reachableTiles, 'reachable');
     if (attackablePieces?.length) scene.setHighlights(attackablePieces.map(p => ({ x: p.x, y: p.y })), 'attack');
     if (rangedAttackablePieces?.length) scene.setHighlights(rangedAttackablePieces.map(p => ({ x: p.x, y: p.y })), 'ranged');
-  }, [reachableTiles, attackablePieces, rangedAttackablePieces]);
+    if (allyHighlightPieces?.length) scene.setHighlights(allyHighlightPieces.map(p => ({ x: p.x, y: p.y })), 'ally');
+  }, [reachableTiles, attackablePieces, rangedAttackablePieces, allyHighlightPieces]);
 
   // Event handlers — update without re-mounting
   useEffect(() => {

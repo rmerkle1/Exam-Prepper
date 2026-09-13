@@ -18,6 +18,7 @@ const COLORS = {
   reachable: 0x44aaff,
   attackable: 0xff4444,
   ranged: 0xff8800,
+  ally: 0x44ff88,
   fog: 0x0a0a18,
 };
 
@@ -347,6 +348,7 @@ export class IsoScene {
     this.fogMeshes = new Map();     // "x,y" -> { mesh, fadingOut, startTime }
     this.furnitureMeshes = new Map(); // "x,y" -> mesh[]
     this.wallCapMeshes = new Map();   // "x,y" -> cap mesh (for secret door removal)
+    this.chestMeshes = new Map();     // "x,y" -> { body, lid, latch, band }
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this._onClickHandlers = [];
@@ -608,6 +610,8 @@ export class IsoScene {
     this.furnitureMeshes.clear();
     this.wallCapMeshes.forEach(m => this.scene.remove(m));
     this.wallCapMeshes.clear();
+    this.chestMeshes.forEach(parts => Object.values(parts).forEach(m => this.scene.remove(m)));
+    this.chestMeshes.clear();
 
     this._boardWidth = quest.boardWidth;
     this._boardHeight = quest.boardHeight;
@@ -719,27 +723,51 @@ export class IsoScene {
       body.castShadow = true;
       this.scene.add(body);
 
-      // Lid (slightly wider/deeper, sits on top)
+      // Lid — pivot point at back edge; use a group so we can rotate it
+      const lidGroup = new THREE.Group();
+      lidGroup.position.set(wx, 0.265, wz - 0.17); // back hinge edge
       const lidGeo = new THREE.BoxGeometry(0.50, 0.09, 0.36);
       const lidMat = this._matWithTex('wall_top', 0x5a3210);
       const lid = new THREE.Mesh(lidGeo, lidMat);
-      lid.position.set(wx, 0.265, wz);
-      this.scene.add(lid);
+      lid.position.set(0, 0, 0.17); // offset forward from hinge
+      lidGroup.add(lid);
+      this.scene.add(lidGroup);
 
-      // Gold latch dot on front
+      // Gold latch
       const latchGeo = new THREE.BoxGeometry(0.09, 0.06, 0.07);
       const latchMat = new THREE.MeshLambertMaterial({ color: 0xc8a020 });
       const latch = new THREE.Mesh(latchGeo, latchMat);
       latch.position.set(wx, 0.22, wz + 0.18);
       this.scene.add(latch);
 
-      // Metal band across the lid
+      // Metal band
       const bandGeo = new THREE.BoxGeometry(0.52, 0.04, 0.06);
       const bandMat = new THREE.MeshLambertMaterial({ color: 0x888855 });
       const band = new THREE.Mesh(bandGeo, bandMat);
       band.position.set(wx, 0.285, wz);
       this.scene.add(band);
+
+      this.chestMeshes.set(`${x},${y}`, { body, lidGroup, latch, band });
     });
+  }
+
+  openChest(x, y) {
+    const parts = this.chestMeshes.get(`${x},${y}`);
+    if (!parts) return;
+    // Animate lid swinging open (rotate ~110° around X axis at hinge)
+    const targetAngle = -Math.PI * 0.62;
+    const startAngle = parts.lidGroup.rotation.x;
+    const duration = 400;
+    const start = performance.now();
+    const animate = () => {
+      const t = Math.min((performance.now() - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      parts.lidGroup.rotation.x = startAngle + (targetAngle - startAngle) * ease;
+      // Hide latch once open
+      if (parts.latch) parts.latch.visible = t > 0.5 ? false : true;
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
   }
 
   buildFog(quest) {
@@ -1014,7 +1042,10 @@ export class IsoScene {
   // ─── Highlights ──────────────────────────────────────────────────────
 
   setHighlights(tiles, mode = 'reachable') {
-    const color = mode === 'reachable' ? COLORS.reachable : mode === 'ranged' ? COLORS.ranged : COLORS.attackable;
+    const color = mode === 'reachable' ? COLORS.reachable
+      : mode === 'ranged' ? COLORS.ranged
+      : mode === 'ally' ? COLORS.ally
+      : COLORS.attackable;
 
     tiles.forEach(({ x, y }) => {
       const { wx, wz } = this._tileToWorld(x, y);

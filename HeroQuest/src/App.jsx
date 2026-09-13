@@ -121,7 +121,13 @@ function initQuestGame(quest, campaignHeroes) {
   }));
   const monsters = quest.monsters.map(m => createMonsterPiece(m));
   const traps = quest.traps.map((t, i) => ({ ...t, id: `trap_${i}`, revealed: false, triggered: false }));
-  const npcs = (quest.npcs || []).map(n => ({ ...n }));
+  const npcs = (quest.npcs || []).map(n => ({
+    ...n,
+    isNPC: true,
+    color: n.color ?? 0xdaa520,
+    isDead: false,
+    freed: false,
+  }));
   return {
     phase: PHASE.HERO_TURN,
     heroes, monsters, traps, npcs,
@@ -166,6 +172,7 @@ export default function App() {
   const [throwingWeapon, setThrowingWeapon] = useState(null);
   const [geniePendingHeroId, setGeniePendingHeroId] = useState(null);
   const [wandPickerHeroId, setWandPickerHeroId] = useState(null);
+  const [allyHighlight, setAllyHighlight] = useState([]);
   const boardRef = useRef(null);
 
   const currentQuest = QUESTS[questIndex];
@@ -241,10 +248,14 @@ export default function App() {
   const handleArmoryComplete = (updatedHeroes) => {
     const nextQIdx = questIndex + 1;
     const next = QUESTS[nextQIdx];
+    // Fallen heroes are resurrected with full health but no gold (per rulebook)
+    const allHeroes = updatedHeroes.map(h =>
+      h.isDead ? { ...h, body: h.maxBody, mind: h.maxMind, isDead: false, gold: 0 } : h
+    );
     setQuestIndex(nextQIdx);
-    setCampaignHeroes(updatedHeroes);
-    saveCampaign(updatedHeroes, nextQIdx, campaignArmoryMode);
-    launchQuest(next, updatedHeroes);
+    setCampaignHeroes(allHeroes);
+    saveCampaign(allHeroes, nextQIdx, campaignArmoryMode);
+    launchQuest(next, allHeroes);
   };
 
   // ─── Victory condition check ─────────────────────────────────────────
@@ -392,8 +403,8 @@ export default function App() {
       if (reachable.some(t => t.x === tile.x && t.y === tile.y)) {
         let updated = { ...g };
 
-        // Trap check — Dwarf automatically disarms traps without taking damage
-        const trap = g.traps.find(t => t.x === tile.x && t.y === tile.y && !t.triggered && !t.revealed);
+        // Trap check — triggers on any unresolved trap (revealed or not). Dwarf auto-disarms.
+        const trap = g.traps.find(t => t.x === tile.x && t.y === tile.y && !t.triggered);
         if (trap) {
           if (hero.heroId === 'dwarf') {
             boardRef.current?.removeTrapMarker(trap.id);
@@ -431,7 +442,6 @@ export default function App() {
         // Victory check
         if (checkVictory(updated, currentQuest, tile.x, tile.y)) {
           setReachable([]); setAttackable([]);
-          setTimeout(handleQuestComplete, 800);
           return {
             ...updated, phase: PHASE.QUEST_COMPLETE,
             log: [...updated.log, { text: 'Quest complete! Heroes escape the dungeon!', color: '#f39c12', time: Date.now() }],
@@ -496,19 +506,43 @@ export default function App() {
   // ─── Spells ───────────────────────────────────────────────────────────
 
   const handleCastSpell = (spell) => {
-    if (targetingSpell?.id === spell.id) { setTargetingSpell(null); return; }
-    if (game?.hasActed || game?.hasSpellCast) return; // spells and attacks are mutually exclusive; one spell per turn
+    if (targetingSpell?.id === spell.id) { setTargetingSpell(null); setAllyHighlight([]); return; }
+    if (game?.hasActed || game?.hasSpellCast) return;
     if (spell.targeting === 'none' || spell.targeting === 'self') {
       applySpell(spell);
     } else {
       setTargetingSpell(spell);
+      if (spell.targeting === 'ally') {
+        const hero = game?.heroes[game.activeHeroIndex];
+        const range = spell.range ?? Infinity;
+        const targets = (game?.heroes || []).filter(h =>
+          !h.isDead &&
+          (hero ? Math.abs(h.x - hero.x) + Math.abs(h.y - hero.y) <= range : true)
+        );
+        setAllyHighlight(targets);
+      } else {
+        setAllyHighlight([]);
+      }
     }
   };
 
   const handleSpellTarget = (tile) => {
     if (!targetingSpell) return;
     const spell = targetingSpell;
+
+    // For ally spells, only proceed if an ally hero is at the clicked tile
+    if (spell.targeting === 'ally') {
+      const target = game?.heroes.find(h => h.x === tile.x && h.y === tile.y && !h.isDead);
+      if (!target) return; // don't cancel — let player retry
+    }
+    // For enemy spells, only proceed if a visible enemy is at the clicked tile
+    if (spell.targeting === 'enemy') {
+      const target = game?.monsters.find(m => m.x === tile.x && m.y === tile.y && !m.isDead);
+      if (!target || !revealedTiles?.has(`${tile.x},${tile.y}`)) return;
+    }
+
     setTargetingSpell(null);
+    setAllyHighlight([]);
     setGame(g => {
       if (!g) return g;
       const hero = g.heroes[g.activeHeroIndex];
@@ -816,13 +850,15 @@ export default function App() {
       const hero = g.heroes[g.activeHeroIndex];
 
       if (action === 'disarm_trap') {
-        if (g.hasActed) return g;
+        // Dwarf: free action (no hasActed cost). Others need their action.
+        if (hero.heroId !== 'dwarf' && g.hasActed) return g;
         const adjTrap = g.traps.find(t => t.revealed && !t.triggered &&
           Math.abs(t.x - hero.x) + Math.abs(t.y - hero.y) <= 1);
         if (!adjTrap) return g;
+        const isDwarf = hero.heroId === 'dwarf';
         // Dwarf disarms automatically; Tool Kit has 50% chance (roll 1 die, skull = fail)
         const hasToolKit = hero.equipment?.some(e => e.isToolKit);
-        if (hasToolKit && hero.heroId !== 'dwarf') {
+        if (hasToolKit && !isDwarf) {
           const roll = rollDice(1);
           const success = roll[0] !== 'skull';
           if (success) {
@@ -845,7 +881,7 @@ export default function App() {
         return {
           ...g,
           traps: g.traps.map(t => t.id === adjTrap.id ? { ...t, triggered: true } : t),
-          hasActed: true,
+          hasActed: !isDwarf, // Dwarf disarms as free action
           log: [...g.log, { text: `${hero.name} disarms the ${adjTrap.type} trap!`, color: '#2ecc71', time: Date.now() }],
         };
       }
@@ -909,6 +945,12 @@ export default function App() {
           }
         }
         setTreasureCard({ card, heroName: hero.name });
+        // Open chest models in this room
+        (currentQuest.treasureChests || []).forEach(c => {
+          if (getRegionKey(currentQuest, c.x, c.y) === roomKey) {
+            boardRef.current?.openChest(c.x, c.y);
+          }
+        });
         return { ...g, heroes: updatedHeroes, monsters: updatedMonsters, treasureDeck: rest, searchedRooms: newSearchedRooms, hasActed: true, log: [...g.log, { text: `${hero.name} searches for treasure...`, color: '#f1c40f', time: Date.now() }] };
       }
 
@@ -937,10 +979,12 @@ export default function App() {
       }
 
       if (action === 'search_secret') {
-        if (g.hasActed) return g;
+        // Dwarf: free action. Others: costs their turn action.
+        const isDwarfSearch = hero.heroId === 'dwarf';
+        if (!isDwarfSearch && g.hasActed) return g;
         // Cannot search while monsters are in the same room
         if (roomHasMonster(g, hero.x, hero.y, revealedTiles)) {
-          return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} cannot search with monsters in the room.`, color: '#e67e22', time: Date.now() }] };
+          return { ...g, hasActed: !isDwarfSearch || g.hasActed, log: [...g.log, { text: `${hero.name} cannot search with monsters in the room.`, color: '#e67e22', time: Date.now() }] };
         }
         // Check for an unrevealed secret door in an adjacent wall
         const secretDoors = currentQuest.secretDoors || [];
@@ -960,9 +1004,9 @@ export default function App() {
             });
             return next;
           });
-          return { ...g, revealedSecretDoors: newRevealedDoors, hasActed: true, log: [...g.log, { text: `${hero.name} discovers a secret door!`, color: '#f39c12', time: Date.now() }] };
+          return { ...g, revealedSecretDoors: newRevealedDoors, hasActed: !isDwarfSearch || g.hasActed, log: [...g.log, { text: `${hero.name} discovers a secret door!`, color: '#f39c12', time: Date.now() }] };
         }
-        return { ...g, hasActed: true, log: [...g.log, { text: `${hero.name} searches for secret doors... none found.`, color: '#666', time: Date.now() }] };
+        return { ...g, hasActed: !isDwarfSearch || g.hasActed, log: [...g.log, { text: `${hero.name} searches for secret doors... none found.`, color: '#666', time: Date.now() }] };
       }
 
       return g;
@@ -1014,7 +1058,8 @@ export default function App() {
   // ─── End turn / monster AI ─────────────────────────────────────────────
 
   const endTurn = () => {
-    setReachable([]); setAttackable([]); setRangedAttackable([]); setTargetingSpell(null); setTargetingItem(null); setThrowingWeapon(null);
+    setReachable([]); setAttackable([]); setRangedAttackable([]); setAllyHighlight([]);
+    setTargetingSpell(null); setTargetingItem(null); setThrowingWeapon(null);
     setGame(g => {
       if (!g) return g;
       const stunned = g.buffedHeroes?.has('tempest');
@@ -1051,7 +1096,7 @@ export default function App() {
   if (screen === 'armory') {
     return (
       <Armory
-        heroes={game?.heroes.filter(h => !h.isDead) || campaignHeroes}
+        heroes={game?.heroes || campaignHeroes}
         questName={currentQuest?.name}
         nextQuestName={nextQuest?.name}
         onContinue={handleArmoryComplete}
@@ -1068,7 +1113,7 @@ export default function App() {
       }}>
         <h1 style={{ color: '#c0963c', fontSize: 40, marginBottom: 16 }}>Campaign Complete!</h1>
         <p style={{ color: '#888', marginBottom: 32 }}>The heroes have defeated Zargon's forces and saved the land.</p>
-        <button onClick={() => { setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
+        <button onClick={() => { localStorage.removeItem('hq_save'); setHasSave(false); setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
           background: '#c0963c', color: '#111', border: 'none',
           borderRadius: 8, padding: '14px 40px', fontSize: 18, cursor: 'pointer', fontWeight: 'bold',
         }}>Play Again</button>
@@ -1081,8 +1126,8 @@ export default function App() {
   const hasPotion = activeHero?.equipment?.some(e => e.usable && (e.healBody || e.healMind || e.buffKey || e.isWand));
   const canRest = !game.hasActed && activeHero?.body < activeHero?.maxBody;
   const throwableWeapons = !game.hasActed ? (activeHero?.equipment?.filter(e => e.throwable) || []) : [];
-  const canDisarmTrap = !game.hasActed &&
-    (activeHero?.heroId === 'dwarf' || activeHero?.equipment?.some(e => e.isToolKit)) &&
+  const canDisarmTrap =
+    (activeHero?.heroId === 'dwarf' || (!game.hasActed && activeHero?.equipment?.some(e => e.isToolKit))) &&
     game.traps?.some(t => t.revealed && !t.triggered &&
       Math.abs(t.x - activeHero.x) + Math.abs(t.y - activeHero.y) <= 1);
 
@@ -1099,6 +1144,7 @@ export default function App() {
           reachableTiles={reachable}
           attackablePieces={attackable}
           rangedAttackablePieces={rangedAttackable}
+          allyHighlightPieces={allyHighlight}
           onTileClick={handleTileClick}
         />
 
@@ -1122,7 +1168,7 @@ export default function App() {
           {targetingSpell && (
             <div style={{ background: '#1a0a2e', border: '1px solid #9b59b6', borderRadius: 8, padding: '10px 20px', color: '#cc99ff', fontSize: 14 }}>
               {targetingSpell.icon} {targetingSpell.name} — click a target
-              <button onClick={() => setTargetingSpell(null)} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+              <button onClick={() => { setTargetingSpell(null); setAllyHighlight([]); }} style={{ marginLeft: 12, background: 'none', border: '1px solid #555', borderRadius: 4, color: '#aaa', padding: '2px 8px', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
             </div>
           )}
           {targetingItem === 'holy_water' && (
@@ -1156,19 +1202,27 @@ export default function App() {
             position: 'absolute', inset: 0, background: '#000000cc',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#eee',
           }}>
-            <h2 style={{ color: game.phase === PHASE.QUEST_COMPLETE ? '#f39c12' : '#e74c3c', fontSize: 36, marginBottom: 12 }}>
+            <h2 style={{ color: game.phase === PHASE.QUEST_COMPLETE ? '#f39c12' : '#e74c3c', fontSize: 36, marginBottom: 8 }}>
               {game.phase === PHASE.QUEST_COMPLETE ? 'Quest Complete!' : 'All Heroes Fallen...'}
             </h2>
+            {game.phase === PHASE.QUEST_COMPLETE && (
+              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                <button onClick={handleQuestComplete} style={{
+                  background: '#1a3a1a', color: '#eee', border: '2px solid #f39c12',
+                  borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
+                }}>{nextQuest ? 'Continue to Armory' : 'View Campaign Complete'}</button>
+              </div>
+            )}
             {game.phase === PHASE.GAME_OVER && (
               <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                 <button onClick={retryQuest} style={{
                   background: '#1a3a1a', color: '#eee', border: '1px solid #2ecc71',
                   borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
                 }}>Retry Quest</button>
-                <button onClick={() => { setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
+                <button onClick={() => { localStorage.removeItem('hq_save'); setHasSave(false); setScreen('lobby'); setQuestIndex(0); setCampaignHeroes(null); setGame(null); }} style={{
                   background: '#7f1d1d', color: '#eee', border: '1px solid #e74c3c',
                   borderRadius: 8, padding: '12px 32px', fontSize: 16, cursor: 'pointer', fontWeight: 'bold',
-                }}>Return to Lobby</button>
+                }}>Abandon Campaign</button>
               </div>
             )}
           </div>
@@ -1203,7 +1257,7 @@ export default function App() {
             canCastSpell={i === game.activeHeroIndex && !game.hasActed && !game.hasSpellCast}
             onCastSpell={i === game.activeHeroIndex ? handleCastSpell : undefined}
             targetingSpell={i === game.activeHeroIndex ? targetingSpell : null}
-            onCancelSpell={() => setTargetingSpell(null)}
+            onCancelSpell={() => { setTargetingSpell(null); setAllyHighlight([]); }}
             targetingItem={i === game.activeHeroIndex ? targetingItem : null}
           />
         ))}

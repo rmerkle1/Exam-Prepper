@@ -52,7 +52,7 @@ function HeroCard({ hero, onBuy, armoryItems }) {
               const restricted = item.forbiddenHeroes?.includes(hero.heroId);
               const replacedByOwned = (() => {
                 if (!item.replaces) return false;
-                return ARMORY_ITEMS.some(better =>
+                return armoryItems.some(better =>
                   better.slot === item.slot &&
                   (Array.isArray(better.replaces) ? better.replaces.includes(item.id) : better.replaces === item.id) &&
                   ownedIds.has(better.id)
@@ -145,6 +145,23 @@ export default function Armory({ heroes, questName, nextQuestName, onContinue, a
             )}
           </div>
         ))}
+        {localHeroes.filter(h => h.isDead).map(hero => {
+          const colorHex = '#' + hero.color.toString(16).padStart(6, '0');
+          return (
+            <div key={hero.id} style={{
+              background: '#0d0d0d', border: `2px solid #333`, opacity: 0.6,
+              borderRadius: 10, padding: 16, flex: '1 1 200px', minWidth: 200, maxWidth: 240,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <div style={{ width: 14, height: 14, borderRadius: '50%', background: colorHex, opacity: 0.5 }} />
+              <div style={{ color: '#555', fontWeight: 'bold', fontSize: 15 }}>{hero.name}</div>
+              <div style={{ color: '#e74c3c', fontSize: 11, letterSpacing: 1 }}>FALLEN</div>
+              <div style={{ color: '#444', fontSize: 11, textAlign: 'center' }}>
+                Will return next quest with full health. Equipment retained, gold lost.
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Continue */}
